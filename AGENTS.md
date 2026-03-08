@@ -23,7 +23,7 @@
 - Task orchestration and caching: `turbo.json`
 - Shared ESLint presets: `packages/eslint-config/base.js`, `packages/eslint-config/next.js`, `packages/eslint-config/react-internal.js`
 - Shared TypeScript configs: `packages/typescript-config/base.json`, `packages/typescript-config/nextjs.json`, `packages/typescript-config/react-library.json`
-- Working with specific apps or packages should be done through their local scripts, for example `pnpm --filter web dev` or `pnpm --filter ui test`
+- Working with specific apps or packages should be done through their local scripts, for example `pnpm turbo dev --filter web` (preferred) or `pnpm --filter web dev` or `pnpm --filter ui test`
 
 ## Codebase conventions
 
