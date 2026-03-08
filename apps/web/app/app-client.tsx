@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode, TouchEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -103,7 +110,7 @@ function AuthScreen({
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Book Repeat</CardTitle>
+          <CardTitle>{isSignUp ? "Create account" : "Sign in"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -179,22 +186,75 @@ function AppShell({
   onTabChange,
   children,
   overlay,
+  header,
+  pinChrome,
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
   children: ReactNode;
   overlay?: ReactNode;
+  header?: ReactNode;
+  pinChrome?: boolean;
 }) {
+  const headerClassName = pinChrome
+    ? "fixed top-0 left-0 right-0 z-20"
+    : "sticky top-0 z-20";
+  const navClassName = pinChrome
+    ? "fixed bottom-0 left-0 right-0 z-20"
+    : "sticky bottom-0 z-20 mt-auto";
+  const mainClassName = pinChrome
+    ? "flex-1 px-4 py-3"
+    : "flex-1 px-4 pb-24 pt-3";
+
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
-      <header className="border-b px-4 py-3">
-        <h1 className="text-base font-semibold">Book Repeat</h1>
-      </header>
+      {header ? (
+        <>
+          {pinChrome ? (
+            <div
+              aria-hidden="true"
+              className="mx-auto w-full max-w-md border-b px-4 py-3 invisible pointer-events-none"
+            >
+              {header}
+            </div>
+          ) : null}
+          <header className={headerClassName}>
+            <div className="mx-auto w-full max-w-md border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+              {header}
+            </div>
+          </header>
+        </>
+      ) : null}
 
-      <main className="flex-1 overflow-y-auto px-4 pb-24 pt-3">{children}</main>
+      <main className={mainClassName}>{children}</main>
 
-      <nav className="fixed bottom-0 left-0 right-0 border-t bg-background">
-        <div className="mx-auto flex w-full max-w-md items-center justify-around px-2 py-2">
+      {pinChrome ? (
+        <div
+          aria-hidden="true"
+          className="mx-auto w-full max-w-md invisible pointer-events-none"
+        >
+          <div className="flex items-center justify-around border-t px-2 py-2">
+            <div className="flex flex-col items-center gap-1 px-3 py-1 text-xs">
+              <BookOpen className="h-4 w-4" />
+              <span>Books</span>
+              {activeTab === "books" ? <Badge>●</Badge> : null}
+            </div>
+            <div className="flex flex-col items-center gap-1 px-3 py-1 text-xs">
+              <FileUp className="h-4 w-4" />
+              <span>Upload</span>
+              {activeTab === "upload" ? <Badge>●</Badge> : null}
+            </div>
+            <div className="flex flex-col items-center gap-1 px-3 py-1 text-xs">
+              <UserIcon className="h-4 w-4" />
+              <span>User</span>
+              {activeTab === "user" ? <Badge>●</Badge> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <nav className={navClassName}>
+        <div className="mx-auto flex w-full max-w-md items-center justify-around border-t bg-background/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <button
             type="button"
             className="flex flex-col items-center gap-1 px-3 py-1 text-xs"
@@ -393,9 +453,28 @@ export function AppClient() {
   const { supabase, session, loadingSession, setSession } =
     useAuthenticatedSession();
   const [books, setBooks] = useState<BookRecord[]>([]);
+  const [bookQuery, setBookQuery] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [loadingBooks, setLoadingBooks] = useState(false);
+  const deferredBookQuery = useDeferredValue(bookQuery);
+
+  const visibleBooks = useMemo(() => {
+    const normalizedQuery = deferredBookQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return books;
+    }
+
+    return books.filter((book) => {
+      const title = book.title.toLowerCase();
+      const authors = book.authors?.toLowerCase() ?? "";
+
+      return (
+        title.includes(normalizedQuery) || authors.includes(normalizedQuery)
+      );
+    });
+  }, [books, deferredBookQuery]);
 
   const loadBooks = useCallback(async () => {
     setLoadingBooks(true);
@@ -503,12 +582,27 @@ export function AppClient() {
     session.user.user_metadata.name ?? session.user.email ?? session.user.id;
 
   let content: ReactNode = null;
+  let header: ReactNode = null;
 
   if (activeTab === "books") {
-    content = <BooksList books={books} loadingBooks={loadingBooks} />;
+    header = (
+      <div className="space-y-3">
+        <Input
+          type="search"
+          value={bookQuery}
+          onChange={(event) => setBookQuery(event.target.value)}
+          placeholder="Filter books"
+          aria-label="Filter books"
+        />
+      </div>
+    );
+
+    content = <BooksList books={visibleBooks} loadingBooks={loadingBooks} />;
   }
 
   if (activeTab === "upload") {
+    header = <h2 className="text-sm font-semibold">Upload</h2>;
+
     content = (
       <UploadSection
         uploading={uploading}
@@ -521,6 +615,8 @@ export function AppClient() {
   }
 
   if (activeTab === "user") {
+    header = <h2 className="text-sm font-semibold">User</h2>;
+
     content = (
       <UserSection
         userLabel={userLabel}
@@ -538,6 +634,7 @@ export function AppClient() {
       onTabChange={(tab) => {
         router.replace(getTabHref(tab));
       }}
+      header={header}
     >
       {content}
     </AppShell>
@@ -667,17 +764,8 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
       onTabChange={(tab) => {
         router.push(getTabHref(tab));
       }}
-      overlay={
-        <BookmarkContextMenu
-          menuState={menuState}
-          onClose={() => setMenuState(null)}
-          onUpdate={(bookmarkId, bookmarkType) => {
-            void updateBookmarkType(bookmarkId, bookmarkType);
-          }}
-        />
-      }
-    >
-      <section className="space-y-3">
+      pinChrome
+      header={
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Button
@@ -703,7 +791,18 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
             {bookmarkFilterLabels[bookmarkFilter]}
           </Button>
         </div>
-
+      }
+      overlay={
+        <BookmarkContextMenu
+          menuState={menuState}
+          onClose={() => setMenuState(null)}
+          onUpdate={(bookmarkId, bookmarkType) => {
+            void updateBookmarkType(bookmarkId, bookmarkType);
+          }}
+        />
+      }
+    >
+      <section className="space-y-3">
         {loadingBook ? (
           <p className="text-sm text-muted-foreground">Loading bookmarks...</p>
         ) : null}

@@ -13,7 +13,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Book Repeat",
+  title: "Bookmarks",
   description: "Upload and read your bookmarks",
 };
 

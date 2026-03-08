@@ -8,6 +8,10 @@
     "/^pnpm --filter web lint$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^cd /home/user/github/book-repeat && pnpm --filter web check-types$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }
