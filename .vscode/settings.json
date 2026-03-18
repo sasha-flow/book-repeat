@@ -16,6 +16,14 @@
     "/^pnpm exec turbo run lint --ui=stream$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^pnpm exec prettier --check README\\.md \\.github/workflows/dev-preview-deploy\\.yml$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm exec prettier --check \\.github/workflows/dev-preview-deploy\\.yml$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }
