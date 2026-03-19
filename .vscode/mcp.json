@@ -11,6 +11,10 @@
 			},
 			"gallery": "https://api.mcp.github.com",
 			"version": "1.0.31"
+		},
+		"FigmaMCP": {
+			"url": "http://127.0.0.1:3845/mcp",
+			"type": "http"
 		}
 	},
 	"inputs": [
