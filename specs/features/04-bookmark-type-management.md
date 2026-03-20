@@ -6,10 +6,13 @@ This feature covers classification of bookmarks into application-specific types 
 
 ## Current behavior
 
-- a long press or right click on a bookmark opens a context menu
-- the menu exposes three target types: `default`, `header`, and `hidden`
+- a long press or right click on a bookmark opens a modal bottom sheet
+- the sheet exposes a copy action and three target types: `default`, `header`, and `hidden`
+- the sheet labels `default` as `Text` in the UI
 - selecting an action updates the stored bookmark record
-- the context menu closes after the update action is triggered
+- the active bookmark type is visually indicated inside the sheet
+- the sheet closes after the update action is triggered
+- the sheet can also close through backdrop tap, `Esc`, or the browser or phone back action
 - the visible list updates according to the current active filter
 
 ## Type semantics
@@ -23,6 +26,9 @@ This feature covers classification of bookmarks into application-specific types 
 - bookmark type is persisted per user bookmark record
 - bookmark type changes are independent from source file re-upload intent, but rely on stable imported bookmark identity
 - the reader uses bookmark type as the single application-level visibility model
+- changing bookmark type updates local reader state immediately so card styling and visibility match the active filter without a reload
+- `header` bookmarks are rendered with emphasized heading styling
+- `hidden` bookmarks remain visible only in the `All` filter and use muted styling there
 
 ## Data dependencies
 

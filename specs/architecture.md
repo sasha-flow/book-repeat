@@ -31,6 +31,7 @@ The browser client is responsible for:
 - fetching books and bookmarks from Supabase
 - applying client-side bookmark visibility filters
 - sending bookmark type updates
+- managing the reader's modal bottom sheet and its close behavior
 - uploading SQLite files to the server import route
 
 Most user-facing state lives in the client-side application shell implemented in `apps/web/app/app-client.tsx`.
@@ -169,7 +170,15 @@ Filter states:
 - `without-hidden`: exclude `hidden`
 - `reading`: exclude `hidden` and `header`
 
+Current user-facing labels:
+
+- `all` -> `All`
+- `without-hidden` -> `Visible`
+- `reading` -> `Text`
+
 This keeps the database model simple while letting the UI provide multiple reading views without duplicating data.
+
+When the `all` filter is active, `hidden` bookmarks remain visible but are rendered with muted visual treatment so they are distinguishable from normal reading content.
 
 ## Security model
 

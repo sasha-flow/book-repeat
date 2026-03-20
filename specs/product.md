@@ -68,15 +68,17 @@ The book detail screen is optimized for reading imported bookmark text in order.
 
 Current behavior:
 
-- show the selected book title in the header
+- show the selected book title in a sticky top header
 - allow navigation back to the books list
+- hide the signed-in bottom navigation while a book is open
 - cycle between three visibility modes:
   - `All`
-  - `No hidden`
-  - `Reading`
+  - `Visible`
+  - `Text`
 - render bookmark rows sorted by source location
-- render `header` bookmarks differently from regular bookmarks
-- allow a long press or right click to open bookmark actions
+- render `header` bookmarks as emphasized heading-style rows
+- render `hidden` bookmarks as muted gray rows when the active filter is `All`
+- allow a long press or right click to open bookmark actions in a modal bottom sheet
 
 The reading screen intentionally emphasizes text consumption and low-friction scrolling over editing density.
 
@@ -90,11 +92,22 @@ Each bookmark has one of three application-level types:
 
 The user can change a bookmark type from the context menu in the book detail screen. The new type is persisted immediately.
 
+The context menu is implemented as a modal bottom sheet.
+
+Supported actions:
+
+- copy bookmark text to the clipboard
+- change bookmark type to `hidden`
+- change bookmark type to `header`
+- change bookmark type to `default` (shown in the UI as `Text`)
+
+The active bookmark type is visually indicated inside the sheet. The sheet can be dismissed by tapping the backdrop, pressing `Esc`, or using the browser or phone back action.
+
 The visibility filter uses these types as its main control surface:
 
 - `All` shows every bookmark
-- `No hidden` hides only `hidden`
-- `Reading` hides both `hidden` and `header`
+- `Visible` hides only `hidden`
+- `Text` hides both `hidden` and `header`
 
 ## Upload experience
 

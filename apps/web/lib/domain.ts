@@ -19,8 +19,8 @@ export interface BookmarkRecord {
 
 export const bookmarkFilterLabels: Record<BookmarkFilter, string> = {
   all: "All",
-  "without-hidden": "No hidden",
-  reading: "Reading",
+  "without-hidden": "Visible",
+  reading: "Text",
 };
 
 export function normalizeBookmarkType(

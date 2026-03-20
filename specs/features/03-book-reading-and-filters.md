@@ -7,21 +7,24 @@ This feature covers the book detail screen used for reading imported bookmark te
 ## Current behavior
 
 - the book detail screen is opened from the books list route
-- the header includes a back action, the current book title, and a filter toggle
+- the reader uses a dedicated mobile-width layout without the app shell's bottom navigation
+- the header is sticky and includes a back action, the current book title, and a filter toggle
 - bookmarks are rendered in source order using `paragraph` and `word`
-- the filter toggle cycles through three modes: `All`, `No hidden`, and `Reading`
-- `header` bookmarks are rendered differently from regular reading items
+- the filter toggle cycles through three modes: `All`, `Visible`, and `Text`
+- `header` bookmarks are rendered as emphasized semibold heading-style items
+- `hidden` bookmarks are rendered as muted gray items when the active filter is `All`
 
 ## Filter semantics
 
 - `All` shows every stored bookmark
-- `No hidden` excludes bookmarks with type `hidden`
-- `Reading` excludes bookmarks with type `hidden` and `header`
+- `Visible` excludes bookmarks with type `hidden`
+- `Text` excludes bookmarks with type `hidden` and `header`
 
 ## Business rules
 
 - source order is preserved for reading consistency
 - filter changes affect only presentation, not stored data
+- the default active reader filter is `Visible`
 - the screen prioritizes legibility and continuous scrolling over dense controls
 
 ## Data dependencies
