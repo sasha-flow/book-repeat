@@ -28,6 +28,7 @@ The browser client is responsible for:
 
 - session-aware rendering
 - tab navigation inside the mobile-first shell
+- applying the selected light, dark, or system theme to the document root
 - fetching books and bookmarks from Supabase
 - applying client-side bookmark visibility filters
 - sending bookmark type updates
@@ -35,6 +36,8 @@ The browser client is responsible for:
 - uploading SQLite files to the server import route
 
 Most user-facing state lives in the client-side application shell implemented in `apps/web/app/app-client.tsx`.
+
+The browser also stores the selected appearance mode in local storage. Theme resolution stays entirely client-side and updates the root document class so the shared UI package CSS variables can switch between light and dark tokens.
 
 ### Server route
 
@@ -203,3 +206,4 @@ Current protections:
 - no dedicated import history UI
 - no automated conflict reporting beyond route errors and import summary fields
 - no multi-source reconciliation beyond per-user UID deduplication
+- no server-side synchronization for browser-local appearance preferences

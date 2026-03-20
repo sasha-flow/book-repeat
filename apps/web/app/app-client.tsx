@@ -47,6 +47,7 @@ import {
   nextBookmarkFilter,
 } from "../lib/bookmark-filters";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
+import { ThemeToggle } from "./theme-toggle";
 
 type Tab = "books" | "upload" | "user";
 
@@ -201,7 +202,9 @@ function ShellNavButton({
     <button
       type="button"
       className={`flex flex-1 flex-col items-center justify-center gap-[3.998px] px-0 pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] transition-colors ${
-        active ? "text-[#030213]" : "text-[#717182] hover:text-[#030213]"
+        active
+          ? "text-foreground"
+          : "text-muted-foreground hover:text-foreground"
       }`}
       style={{
         paddingTop: 10.005,
@@ -254,7 +257,7 @@ function AppShell({
 
   return (
     <div
-      className="mx-auto flex min-h-screen w-full flex-col bg-white"
+      className="mx-auto flex min-h-screen w-full flex-col bg-background text-foreground"
       style={{ maxWidth: 393.256 }}
     >
       {header ? (
@@ -282,7 +285,7 @@ function AppShell({
       {bottomBar ? (
         <div className={bottomBarClassName}>
           <div
-            className="mx-auto h-[69.079px] w-full border-t-[1.108px] border-black/10 bg-white"
+            className="mx-auto h-[69.079px] w-full border-t-[1.108px] border-border bg-background"
             style={{
               maxWidth: 393.256,
               paddingLeft: 15.993,
@@ -301,16 +304,16 @@ function AppShell({
           className="mx-auto w-full invisible pointer-events-none"
           style={{ maxWidth: 393.256 }}
         >
-          <div className="flex h-[65.098px] items-stretch border-t-[1.108px] border-black/10 bg-white">
-            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-[#030213]">
+          <div className="flex h-[65.098px] items-stretch border-t-[1.108px] border-border bg-background">
+            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-foreground">
               <BookOpen className="size-[23.99px]" strokeWidth={1.9} />
               <span className="font-normal">Books</span>
             </div>
-            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-[#717182]">
+            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-muted-foreground">
               <FileUp className="size-[23.99px]" strokeWidth={1.9} />
               <span className="font-normal">Upload</span>
             </div>
-            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-[#717182]">
+            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-muted-foreground">
               <UserIcon className="size-[23.99px]" strokeWidth={1.9} />
               <span className="font-normal">Profile</span>
             </div>
@@ -320,7 +323,7 @@ function AppShell({
 
       <nav className={navClassName}>
         <div
-          className="mx-auto flex h-[65.098px] w-full items-stretch border-t-[1.108px] border-black/10 bg-white"
+          className="mx-auto flex h-[65.098px] w-full items-stretch border-t-[1.108px] border-border bg-background"
           style={{ maxWidth: 393.256 }}
         >
           <ShellNavButton
@@ -366,14 +369,14 @@ function BooksList({
           <li key={book.id}>
             <Link
               href={`/books/${book.id}`}
-              className="block w-full text-left text-[16px] font-normal leading-[24px] text-[#0a0a0a] transition-colors hover:bg-white"
+              className="block w-full text-left text-[16px] font-normal leading-[24px] text-foreground transition-colors hover:bg-accent/40"
               style={{
                 minHeight: 58.192,
                 borderRadius: 10,
                 borderWidth: 1.108,
                 borderStyle: "solid",
-                borderColor: "rgba(0, 0, 0, 0.1)",
-                backgroundColor: "#ffffff",
+                borderColor: "var(--border)",
+                backgroundColor: "var(--card)",
                 paddingLeft: 17.101,
                 paddingRight: 17.101,
                 paddingTop: 17.101,
@@ -386,12 +389,12 @@ function BooksList({
         ))}
         {!books.length && !loadingBooks ? (
           <li
-            className="bg-white text-sm text-muted-foreground"
+            className="bg-card text-sm text-muted-foreground"
             style={{
               borderRadius: 10,
               borderWidth: 1.108,
               borderStyle: "dashed",
-              borderColor: "rgba(0, 0, 0, 0.1)",
+              borderColor: "var(--border)",
               paddingLeft: 17.101,
               paddingRight: 17.101,
               paddingTop: 17.101,
@@ -457,13 +460,14 @@ function UserSection({
     <section className="space-y-3">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">User</CardTitle>
+          <CardTitle className="text-base">Profile</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
             <p className="text-sm text-muted-foreground">Signed in as</p>
             <p className="text-sm font-medium">{userLabel}</p>
           </div>
+          <ThemeToggle />
           <Button
             className="border border-input bg-background text-foreground shadow-none hover:bg-accent"
             onClick={() => {
@@ -514,12 +518,12 @@ function BookmarkContextMenu({
       <div className="fixed inset-x-0 bottom-0 z-50">
         <div className="mx-auto w-full" style={{ maxWidth: 393.256 }}>
           <div
-            className="bg-white"
+            className="bg-background"
             style={{
               minHeight: 281.978,
               borderTopWidth: 1.108,
               borderTopStyle: "solid",
-              borderTopColor: "rgba(0, 0, 0, 0.1)",
+              borderTopColor: "var(--border)",
               borderTopLeftRadius: 10,
               borderTopRightRadius: 10,
               boxShadow: "0 -10px 30px rgba(3, 2, 19, 0.08)",
@@ -530,7 +534,7 @@ function BookmarkContextMenu({
           >
             <div className="flex justify-center" style={{ paddingTop: 15.99 }}>
               <div
-                className="bg-[#ececf0]"
+                className="bg-muted"
                 style={{
                   width: 99.993,
                   height: 7.997,
@@ -542,7 +546,7 @@ function BookmarkContextMenu({
             <div style={{ paddingTop: 8, paddingBottom: 8 }}>
               <button
                 type="button"
-                className="flex w-full items-center gap-[15.993px] text-left text-[#0a0a0a] transition-colors hover:bg-black/5"
+                className="flex w-full items-center gap-[15.993px] text-left text-foreground transition-colors hover:bg-accent"
                 style={{
                   minHeight: 55.977,
                   paddingLeft: 15.993,
@@ -559,7 +563,7 @@ function BookmarkContextMenu({
               </button>
 
               <div
-                className="bg-black/10"
+                className="bg-border"
                 style={{ height: 0.987, marginTop: 7.996, marginBottom: 8.983 }}
               />
 
@@ -571,12 +575,12 @@ function BookmarkContextMenu({
                   <button
                     key={action.type}
                     type="button"
-                    className="flex w-full items-center gap-[15.993px] text-left text-[#0a0a0a] transition-colors hover:bg-black/5"
+                    className="flex w-full items-center gap-[15.993px] text-left text-foreground transition-colors hover:bg-accent"
                     style={{
                       minHeight: 55.977,
                       paddingLeft: 15.993,
                       paddingRight: 15.993,
-                      backgroundColor: active ? "#eceef2" : "transparent",
+                      backgroundColor: active ? "var(--accent)" : "transparent",
                     }}
                     onClick={() => onUpdate(menuState.bookmarkId, action.type)}
                   >
@@ -751,7 +755,7 @@ export function AppClient() {
       <div className="relative h-[35.985px] w-full">
         <Search
           aria-hidden="true"
-          className="pointer-events-none absolute left-[12px] top-[7.99px] size-[19.992px] text-[#717182]"
+          className="pointer-events-none absolute left-[12px] top-[7.99px] size-[19.992px] text-muted-foreground"
           strokeWidth={1.9}
         />
         <Input
@@ -762,7 +766,7 @@ export function AppClient() {
           onChange={(event) => setBookQuery(event.target.value)}
           placeholder="Search books..."
           aria-label="Search books"
-          className="h-[35.985px] rounded-[8px] border-[1.108px] border-transparent bg-[#f3f3f5] px-0 py-0 text-[16px] font-normal text-[#0a0a0a] shadow-none placeholder:text-[#717182] focus-visible:ring-1 focus-visible:ring-[#c7cad1] focus-visible:ring-offset-0"
+          className="h-[35.985px] rounded-[8px] border-[1.108px] border-input bg-muted/70 px-0 py-0 text-[16px] font-normal text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0"
           style={{
             paddingLeft: 40,
             paddingRight: 12,
@@ -1001,25 +1005,25 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
   return (
     <>
       <div
-        className="mx-auto flex min-h-screen w-full flex-col bg-white"
+        className="mx-auto flex min-h-screen w-full flex-col bg-background text-foreground"
         style={{ maxWidth: 393.256 }}
       >
-        <header className="fixed top-0 left-0 right-0 z-30 bg-white">
+        <header className="fixed top-0 left-0 right-0 z-30 bg-background">
           <div
-            className="mx-auto w-full bg-white"
+            className="mx-auto w-full bg-background"
             style={{ maxWidth: 393.256 }}
           >
             <div
-              className="relative border-b bg-white"
+              className="relative border-b border-border bg-background"
               style={{
                 height: 65.081,
                 borderBottomWidth: 1.108,
-                borderBottomColor: "rgba(0, 0, 0, 0.1)",
+                borderBottomColor: "var(--border)",
               }}
             >
               <button
                 type="button"
-                className="absolute flex items-center justify-center rounded-[10px] text-[#030213] transition-colors hover:bg-black/5"
+                className="absolute flex items-center justify-center rounded-[10px] text-foreground transition-colors hover:bg-accent"
                 style={{
                   left: 15.993,
                   top: 12,
@@ -1043,14 +1047,14 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                   height: 30,
                 }}
               >
-                <h1 className="line-clamp-1 text-center text-[20px] font-medium leading-[30px] text-[#030213]">
+                <h1 className="line-clamp-1 text-center text-[20px] font-medium leading-[30px] text-foreground">
                   {book?.title ?? "Book bookmarks"}
                 </h1>
               </div>
 
               <button
                 type="button"
-                className="absolute flex flex-col items-center justify-center rounded-[10px] text-[#030213] transition-colors hover:bg-black/5"
+                className="absolute flex flex-col items-center justify-center rounded-[10px] text-foreground transition-colors hover:bg-accent"
                 style={{
                   right: 15.993,
                   top: 12,
@@ -1064,7 +1068,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                 aria-label={`Change bookmark filter. Current filter: ${bookmarkFilterLabels[bookmarkFilter]}`}
               >
                 <Filter className="size-[18px]" strokeWidth={1.9} />
-                <span className="text-[10px] leading-[10px] text-[#030213]">
+                <span className="text-[10px] leading-[10px] text-foreground">
                   {bookmarkFilterLabels[bookmarkFilter]}
                 </span>
               </button>
@@ -1085,7 +1089,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
           <section style={{ display: "grid", gap: 11.995, minWidth: 0 }}>
             {loadingBook ? (
               <div
-                className="bg-white text-sm text-muted-foreground"
+                className="bg-card text-sm text-muted-foreground"
                 style={{
                   minHeight: 58.192,
                   width: "100%",
@@ -1093,7 +1097,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                   borderRadius: 10,
                   borderWidth: 1.108,
                   borderStyle: "solid",
-                  borderColor: "rgba(0, 0, 0, 0.1)",
+                  borderColor: "var(--border)",
                   paddingLeft: 17.101,
                   paddingRight: 17.101,
                   paddingTop: 17.101,
@@ -1106,14 +1110,14 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
 
             {statusMessage ? (
               <div
-                className="bg-white text-sm text-[#030213]"
+                className="bg-card text-sm text-foreground"
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
                   borderRadius: 10,
                   borderWidth: 1.108,
                   borderStyle: "solid",
-                  borderColor: "rgba(0, 0, 0, 0.1)",
+                  borderColor: "var(--border)",
                   paddingLeft: 17.101,
                   paddingRight: 17.101,
                   paddingTop: 17.101,
@@ -1126,14 +1130,14 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
 
             {!loadingBook && !book ? (
               <div
-                className="bg-white text-sm text-muted-foreground"
+                className="bg-card text-sm text-muted-foreground"
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
                   borderRadius: 10,
                   borderWidth: 1.108,
                   borderStyle: "dashed",
-                  borderColor: "rgba(0, 0, 0, 0.1)",
+                  borderColor: "var(--border)",
                   paddingLeft: 17.101,
                   paddingRight: 17.101,
                   paddingTop: 17.101,
@@ -1171,7 +1175,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                       }
                       onTouchEnd={handleLongPressEnd}
                       onTouchCancel={handleLongPressEnd}
-                      className="bg-white"
+                      className="bg-card"
                       style={{
                         width: "100%",
                         boxSizing: "border-box",
@@ -1180,15 +1184,15 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                         borderWidth: 1.108,
                         borderStyle: "solid",
                         borderColor: isHeader
-                          ? "rgba(3, 2, 19, 0.2)"
+                          ? "var(--ring)"
                           : isHidden
-                            ? "rgba(113, 113, 130, 0.2)"
-                            : "rgba(0, 0, 0, 0.1)",
+                            ? "var(--input)"
+                            : "var(--border)",
                         backgroundColor: isHeader
-                          ? "#fcfcfd"
+                          ? "var(--secondary)"
                           : isHidden
-                            ? "#f8f8fa"
-                            : "#ffffff",
+                            ? "var(--muted)"
+                            : "var(--card)",
                         paddingLeft: 17.101,
                         paddingRight: 17.101,
                         paddingTop: 17.101,
@@ -1197,7 +1201,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                     >
                       {isHeader ? (
                         <p
-                          className="text-[16px] font-semibold leading-[24px] text-[#030213]"
+                          className="text-[16px] font-semibold leading-[24px] text-foreground"
                           style={{ overflowWrap: "anywhere" }}
                         >
                           {bookmark.bookmark_text}
@@ -1207,7 +1211,9 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                           className="text-[16px] font-normal leading-[24px]"
                           style={{
                             overflowWrap: "anywhere",
-                            color: isHidden ? "#717182" : "#030213",
+                            color: isHidden
+                              ? "var(--muted-foreground)"
+                              : "var(--foreground)",
                           }}
                         >
                           {bookmark.bookmark_text}
@@ -1219,14 +1225,14 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
 
                 {!visibleBookmarks.length ? (
                   <li
-                    className="bg-white text-sm text-muted-foreground"
+                    className="bg-card text-sm text-muted-foreground"
                     style={{
                       width: "100%",
                       boxSizing: "border-box",
                       borderRadius: 10,
                       borderWidth: 1.108,
                       borderStyle: "dashed",
-                      borderColor: "rgba(0, 0, 0, 0.1)",
+                      borderColor: "var(--border)",
                       paddingLeft: 17.101,
                       paddingRight: 17.101,
                       paddingTop: 17.101,
