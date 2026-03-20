@@ -11,7 +11,7 @@ The current implementation supports:
 - a per-book reading screen with bookmark visibility filters
 - bookmark type changes between `default`, `header`, and `hidden`
 
-Deeper project documentation lives under [specs/product.md](specs/product.md), [specs/architecture.md](specs/architecture.md), and [specs/features.md](specs/features.md).
+Deeper project documentation lives under [specs/product.md](specs/product.md), [specs/architecture.md](specs/architecture.md), [specs/infra.md](specs/infra.md), and [specs/features.md](specs/features.md).
 
 ## Workspace layout
 
@@ -113,75 +113,6 @@ pnpm lint
 pnpm check-types
 pnpm build
 ```
-
-## GitHub workflows
-
-The repository contains two GitHub Actions workflows under `.github/workflows`:
-
-- `web-main-check.yml`: validates the web application for pushes and pull requests targeting `main`
-- `supabase-production.yml`: validates Supabase migrations for pull requests to `main` and applies them on pushes to `main`
-
-### Web workflow
-
-The web workflow:
-
-1. installs dependencies
-2. runs `pnpm --filter web lint`
-3. runs `pnpm --filter web build`
-
-### Supabase workflow
-
-The Supabase workflow:
-
-1. links the production Supabase project
-2. runs `supabase db push --dry-run` for validation on pull requests
-3. runs `supabase db push` on pushes to `main`
-
-Pull requests validate production migration compatibility but do not mutate production.
-
-### GitHub configuration
-
-Add this GitHub Actions variable:
-
-- `SUPABASE_PROJECT_ID`: Supabase production project reference used by `supabase link`
-
-Add these GitHub Actions secrets:
-
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: production anon or publishable key used during the web build
-- `SUPABASE_DB_PASSWORD`: production Supabase database password
-- `SUPABASE_ACCESS_TOKEN`: Supabase access token for non-interactive CLI usage
-
-The web workflow derives `NEXT_PUBLIC_SUPABASE_URL` from `SUPABASE_PROJECT_ID` as `https://{project-ref}.supabase.co`.
-
-## Production deployment
-
-1. Create a Supabase project in Supabase Cloud.
-2. Link the local Supabase directory to that project:
-
-```bash
-supabase link --project-ref <your-project-ref>
-```
-
-3. Push the tracked schema migrations:
-
-```bash
-supabase db push
-```
-
-4. Configure runtime environment variables in the deployment target:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SUPABASE_IMPORT_BUCKET` if you do not want the default `imports`
-
-5. Deploy `apps/web` as a Next.js application.
-
-### Production notes
-
-- `supabase/config.toml` contains local-only configuration and is not part of the production push flow.
-- The `imports` bucket is created by the tracked SQL migration.
-- `NEXT_PUBLIC_` variables are build-time values for Next.js and must match the deployed Supabase project.
 
 ## Dependency policy
 
