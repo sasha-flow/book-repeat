@@ -99,30 +99,45 @@ Operational expectations:
 
 ## Production delivery model
 
-Production deployment is currently described only at a high level.
+Production deployment is currently described at a high level, with schema rollout now automated through GitHub Actions.
 
 - a Next.js hosting target for `apps/web`
 - Supabase Cloud for managed backend services and database schema delivery
+- Vercel Git integration for automatic production deployment of `apps/web` from `main`
 
 Expected production flow:
 
 1. create the Supabase project
-2. link the local `supabase` directory with `supabase link --project-ref <project-ref>`
-3. push tracked schema migrations with `supabase db push`
-4. configure runtime environment variables in the deployment platform
-5. deploy the Next.js application from `apps/web`
+2. connect the repository to the hosting platform for application delivery
+3. connect `apps/web` to Vercel so Vercel automatically deploys the production environment from `main`
+4. connect the Supabase project to the Vercel project so production Vercel environment variables are populated automatically by the Supabase-to-Vercel integration
+5. configure GitHub Actions credentials for production Supabase access
+6. merge or push tracked schema migrations to `main`, or run the production migration workflow manually
+7. let the GitHub Actions production migration workflow link the repository to the production Supabase project and apply `supabase db push`
+8. let Vercel build and deploy the Next.js application from `apps/web` to the production environment
 
 The `imports` bucket is expected to be created by tracked SQL migrations rather than by ad hoc runtime setup.
+
+The production migration workflow is implemented in `.github/workflows/production-supabase-migrate.yml` and is triggered on every push to `main` as well as by manual workflow dispatch.
+The production application deployment is handled separately by Vercel, which automatically deploys `apps/web` to the Vercel production environment from the `main` branch.
 
 ## Operational notes
 
 - `supabase/config.toml` is used for local development configuration and is not the mechanism used to apply production schema changes
 - production schema changes are migration-driven through the tracked SQL files in `supabase/migrations`
-- no repository-managed CI/CD workflow is currently documented
+- production schema changes are applied in CI with the GitHub Actions workflow `.github/workflows/production-supabase-migrate.yml`
+- application deployment to production is handled by Vercel Git integration on pushes to `main`
+- production Vercel environment variables are populated automatically by the Supabase-to-Vercel integration
+
+- the production migration workflow requires these GitHub Actions values:
+  - `SUPABASE_ACCESS_TOKEN`: GITHUB SECRET, personal access token used by Supabase CLI in non-interactive CI runs
+  - `SUPABASE_PROJECT_ID`: GITHUB VARIABLE, production Supabase project reference
+  - `SUPABASE_DB_PASSWORD`: GITHUB SECRET, production database password required for remote migration operations
+- the migration workflow is intentionally scoped to database schema rollout and does not perform application deployment to Vercel
 
 ## Current limitations
 
 - no separate staging environment is documented in the repository
-- no CI/CD pipeline is currently tracked in the repository
+- no staging or preview database migration pipeline is currently tracked in the repository
 - no infrastructure automation for provisioning hosting or Supabase projects is tracked in the repository
 - no background job infrastructure exists for import processing; imports run inline in the application request lifecycle
