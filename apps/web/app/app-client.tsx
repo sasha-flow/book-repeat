@@ -46,6 +46,7 @@ import {
   applyBookmarkFilter,
   nextBookmarkFilter,
 } from "../lib/bookmark-filters";
+import { getOpaqueHeaderSurfaceStyle } from "../lib/book-detail-styles";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -825,6 +826,7 @@ export function AppClient() {
 }
 
 export function BookDetailClient({ bookId }: { bookId: string }) {
+  const opaqueHeaderSurfaceStyle = getOpaqueHeaderSurfaceStyle();
   const router = useRouter();
   const { supabase, session, loadingSession, setSession } =
     useAuthenticatedSession();
@@ -1008,14 +1010,21 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
         className="mx-auto flex min-h-screen w-full flex-col bg-background text-foreground"
         style={{ maxWidth: 393.256 }}
       >
-        <header className="fixed top-0 left-0 right-0 z-30 bg-background">
+        <header
+          className="fixed top-0 left-0 right-0 z-30 bg-background"
+          style={opaqueHeaderSurfaceStyle}
+        >
           <div
             className="mx-auto w-full bg-background"
-            style={{ maxWidth: 393.256 }}
+            style={{
+              ...opaqueHeaderSurfaceStyle,
+              maxWidth: 393.256,
+            }}
           >
             <div
               className="relative border-b border-border bg-background"
               style={{
+                ...opaqueHeaderSurfaceStyle,
                 height: 65.081,
                 borderBottomWidth: 1.108,
                 borderBottomColor: "var(--border)",
