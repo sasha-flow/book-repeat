@@ -32,6 +32,29 @@ Primary workspace commands:
 
 For web-only work, the repository also supports filtered commands such as `pnpm --filter web dev`.
 
+## Pull request validation
+
+The repository includes a dedicated pull request validation workflow at `.github/workflows/pull-request-validation.yml`.
+
+The workflow runs on every `pull_request` event and performs the standard workspace verification flow:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm lint`
+- `pnpm check-types`
+- `pnpm build`
+- `supabase db push --dry-run` when Supabase CI credentials are available
+- `pnpm -r --if-present test`
+
+Implementation notes:
+
+- dependency installation is performed once at the workspace root with `pnpm`
+- linting, type checking, and build run through the root scripts, which delegate to Turborepo
+- test execution is future-proofed by using `pnpm -r --if-present test`, so packages are tested automatically as soon as package-level `test` scripts are added
+- the workflow provides placeholder Supabase environment variables so build validation can run in CI without production credentials
+- the workflow also performs a Supabase migration dry-run against the configured remote project when `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_PROJECT_ID` are available in GitHub Actions
+- the Supabase dry-run step is skipped when those credentials are not available, which keeps pull requests from forks from failing only because repository secrets are unavailable
+- this workflow is intentionally separate from `.github/workflows/production-supabase-migrate.yml`
+
 ## Application runtime
 
 The product runtime is centered on the `apps/web` Next.js application.
@@ -125,9 +148,12 @@ The production application deployment is handled separately by Vercel, which aut
 
 - `supabase/config.toml` is used for local development configuration and is not the mechanism used to apply production schema changes
 - production schema changes are migration-driven through the tracked SQL files in `supabase/migrations`
+- pull request validation is executed in CI with the GitHub Actions workflow `.github/workflows/pull-request-validation.yml`
+- pull request validation includes a conditional Supabase migration dry-run so schema changes in `supabase/migrations` are checked before merge when GitHub Actions credentials are available
 - production schema changes are applied in CI with the GitHub Actions workflow `.github/workflows/production-supabase-migrate.yml`
 - application deployment to production is handled by Vercel Git integration on pushes to `main`
 - production Vercel environment variables are populated automatically by the Supabase-to-Vercel integration
+- failing pull request workflow runs do not block merging by themselves; the repository branch protection rules must require the workflow status check for it to be merge-blocking
 
 - the production migration workflow requires these GitHub Actions values:
   - `SUPABASE_ACCESS_TOKEN`: GITHUB SECRET, personal access token used by Supabase CLI in non-interactive CI runs
