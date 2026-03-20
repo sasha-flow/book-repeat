@@ -1,159 +1,126 @@
-# Turborepo starter
+# Book Repeat Monorepo
 
-This Turborepo starter is maintained by the Turborepo core team.
+Book Repeat is a mobile-first web application for importing SQLite bookmark databases into Supabase and reading imported bookmarks by book.
 
-## Using this example
+The current implementation supports:
 
-Run the following command:
+- email/password authentication with Supabase Auth
+- a mobile-first application shell with bottom navigation for `Books`, `Upload`, and `User`
+- SQLite file upload, parsing, user-scoped deduplication, and import run logging
+- a searchable books list
+- a per-book reading screen with bookmark visibility filters
+- bookmark type changes between `default`, `header`, and `hidden`
 
-```sh
-npx create-turbo@latest
+Deeper project documentation lives under [specs/product.md](specs/product.md), [specs/architecture.md](specs/architecture.md), [specs/infra.md](specs/infra.md), and [specs/features.md](specs/features.md).
+
+## Workspace layout
+
+- `apps/web`: product app built with Next.js App Router, TypeScript, Tailwind, and Supabase
+- `packages/ui`: shared shadcn-style UI primitives used by the web app
+- `packages/eslint-config`: shared ESLint configuration
+- `packages/typescript-config`: shared TypeScript configuration
+- `supabase`: local Supabase configuration and SQL migrations
+- `specs`: product, architecture, and feature documentation
+
+## Product flow
+
+1. The user signs in or creates an account.
+2. The authenticated app opens in a mobile-first shell.
+3. In `Upload`, the user selects a SQLite database file exported from the source reader app.
+4. The backend uploads the file to Supabase Storage, parses it, upserts user-scoped books and bookmarks, writes an import summary, and deletes the uploaded file.
+5. In `Books`, the user browses imported books and opens a book detail screen.
+6. In the book detail screen, the user reads bookmarks, cycles the visibility filter, and changes bookmark types from the context menu.
+7. In `User`, the user sees the current account email and can sign out.
+
+## Prerequisites
+
+- Node.js `>= 18`
+- `pnpm`
+- Supabase CLI
+- Docker for local Supabase services
+
+## Install and run
+
+Install dependencies and start the workspace:
+
+```bash
+pnpm install
+pnpm dev
 ```
 
-## What's inside?
+Run only the web app:
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+pnpm --filter web dev
 ```
 
-Without global `turbo`, use your package manager:
+## Local Supabase setup
 
-```sh
-cd my-turborepo
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+1. Start local Supabase services:
+
+```bash
+supabase start
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+2. Reset the local database and apply tracked migrations:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
+```bash
+supabase db reset
 ```
 
-Without global `turbo`:
+3. Read the local project credentials:
 
-```sh
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+```bash
+supabase status
 ```
 
-### Develop
+The command prints values such as:
 
-To develop all apps and packages, run the following command:
+- `Project URL` for example `http://127.0.0.1:54321`
+- `Publishable` sometimes labeled `anon` by older Supabase CLI versions
+- `Secret` sometimes labeled `service_role` by older Supabase CLI versions
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+4. Create `apps/web/.env.local` with:
 
-```sh
-cd my-turborepo
-turbo dev
+- `NEXT_PUBLIC_SUPABASE_URL` = local `Project URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` = local `Publishable` or `anon`
+- `SUPABASE_SERVICE_ROLE_KEY` = local `Secret` or `service_role`
+- `SUPABASE_IMPORT_BUCKET` = optional bucket override, defaults to `imports`
+
+Example:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
+SUPABASE_IMPORT_BUCKET=imports
 ```
 
-Without global `turbo`, use your package manager:
+## Useful commands
 
-```sh
-cd my-turborepo
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+Run app checks:
+
+```bash
+pnpm --filter web lint
+pnpm --filter web check-types
+pnpm --filter web build
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Run workspace-level checks:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
+```bash
+pnpm lint
+pnpm check-types
+pnpm build
 ```
 
-Without global `turbo`:
+## Dependency policy
 
-```sh
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+- install new dependencies at the latest stable version
+- prefer package manager commands over manual version edits
+- use workspace maintenance commands when checking or updating dependencies
+
+```bash
+pnpm run deps:check
+pnpm run deps:update
 ```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)

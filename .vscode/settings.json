@@ -3,5 +3,27 @@
     {
       "mode": "auto"
     }
-  ]
+  ],
+  "chat.tools.terminal.autoApprove": {
+    "/^pnpm --filter web lint$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^cd /home/user/github/book-repeat && pnpm --filter web check-types$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm exec turbo run lint --ui=stream$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm exec prettier --check README\\.md \\.github/workflows/dev-preview-deploy\\.yml$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm exec prettier --check \\.github/workflows/dev-preview-deploy\\.yml$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
 }
