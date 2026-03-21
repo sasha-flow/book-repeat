@@ -119,7 +119,7 @@ Current behavior:
 - accept a SQLite database file from the user
 - send the file to a server route with the current auth token
 - parse source books, authors, and bookmarks on the server
-- deduplicate books and bookmarks per user by source UID
+- deduplicate books per user by source hash and bookmarks per user by source UID
 - write an import summary row
 - delete the uploaded file from storage after processing
 

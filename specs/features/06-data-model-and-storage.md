@@ -12,14 +12,14 @@ Stored fields:
 
 - application id
 - owning user id
-- source UID
+- source hash
 - title
 - flattened authors text
 - created and updated timestamps
 
 Uniqueness rule:
 
-- one row per `(user_id, source_uid)`
+- one row per `(user_id, source_hash)`
 
 ### Bookmarks
 
@@ -60,6 +60,7 @@ Stored fields:
 ## Integrity and ordering rules
 
 - bookmarks reference books through `book_id`
+- books are deduplicated by a deterministic `source_hash` selection from source `BookHash` rows
 - deleting a book cascades to its bookmarks
 - deleting a user cascades to imported books, bookmarks, and import runs
 - bookmarks are displayed in source order using `(paragraph, word)`

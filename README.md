@@ -24,10 +24,10 @@ Deeper project documentation lives under [specs/product.md](specs/product.md), [
 
 ## Product flow
 
-1. The user signs in or creates an account.
+1. The user signs in.
 2. The authenticated app opens in a mobile-first shell.
 3. In `Upload`, the user selects a SQLite database file exported from the source reader app.
-4. The backend uploads the file to Supabase Storage, parses it, upserts user-scoped books and bookmarks, writes an import summary, and deletes the uploaded file.
+4. The backend uploads the file to Supabase Storage, parses it, deterministically resolves one latest `BookHash` per source book, upserts user-scoped books and bookmarks, writes an import summary, and deletes the uploaded file.
 5. In `Books`, the user browses imported books and opens a book detail screen.
 6. In the book detail screen, the user reads bookmarks, cycles the visibility filter, and changes bookmark types from the context menu.
 7. In `User`, the user sees the current account email and can sign out.
@@ -101,6 +101,7 @@ SUPABASE_IMPORT_BUCKET=imports
 Run app checks:
 
 ```bash
+pnpm --filter web test
 pnpm --filter web lint
 pnpm --filter web check-types
 pnpm --filter web build

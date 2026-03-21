@@ -30,7 +30,7 @@ Primary workspace commands:
 - `pnpm dev` starts the workspace development flow
 - `pnpm lint`, `pnpm check-types`, and `pnpm build` run workspace-level verification tasks
 
-For web-only work, the repository also supports filtered commands such as `pnpm --filter web dev`.
+For web-only work, the repository also supports filtered commands such as `pnpm --filter web dev`, `pnpm --filter web test`, `pnpm --filter web lint`, `pnpm --filter web check-types`, and `pnpm --filter web build`.
 
 ## Pull request validation
 

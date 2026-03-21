@@ -704,36 +704,63 @@ export function AppClient() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch("/api/import-sqlite", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: formData,
-    });
+    try {
+      const response = await fetch("/api/import-sqlite", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
 
-    const responseJson = (await response.json()) as {
-      error?: string;
-      books?: number;
-      bookmarks?: number;
-      fileDeleted?: boolean;
-    };
+      const responseJson = (await response.json()) as {
+        error?: string;
+        details?: unknown;
+        books?: number;
+        bookmarks?: number;
+        fileDeleted?: boolean;
+        deleteError?: string | null;
+      };
 
-    setUploading(false);
+      setUploading(false);
 
-    if (!response.ok) {
-      setUploadMessage(responseJson.error ?? "Import failed");
-      return;
+      if (!response.ok) {
+        console.error("[upload] import request failed", {
+          fileName: file.name,
+          fileSize: file.size,
+          status: response.status,
+          response: responseJson,
+        });
+        setUploadMessage(responseJson.error ?? "Import failed");
+        return;
+      }
+
+      console.info("[upload] import request completed", {
+        fileName: file.name,
+        fileSize: file.size,
+        response: responseJson,
+      });
+
+      const deletedText = responseJson.fileDeleted
+        ? "File deleted"
+        : "Delete retry needed";
+      setUploadMessage(
+        `Imported books: ${responseJson.books ?? 0}, bookmarks: ${responseJson.bookmarks ?? 0}. ${deletedText}.`,
+      );
+
+      await loadBooks();
+    } catch (error) {
+      setUploading(false);
+      console.error("[upload] import request threw unexpectedly", {
+        fileName: file.name,
+        fileSize: file.size,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? (error.stack ?? null) : null,
+      });
+      setUploadMessage(
+        error instanceof Error ? error.message : "Import failed",
+      );
     }
-
-    const deletedText = responseJson.fileDeleted
-      ? "File deleted"
-      : "Delete retry needed";
-    setUploadMessage(
-      `Imported books: ${responseJson.books ?? 0}, bookmarks: ${responseJson.bookmarks ?? 0}. ${deletedText}.`,
-    );
-
-    await loadBooks();
   };
 
   if (loadingSession) {

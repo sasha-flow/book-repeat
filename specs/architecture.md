@@ -49,6 +49,7 @@ Its responsibilities are:
 - validate the caller by resolving the bearer token through Supabase Auth
 - upload the raw file into the configured Supabase Storage bucket
 - parse the SQLite payload on the server
+- log detailed import diagnostics and failures to the server console
 - upsert books and bookmarks into Postgres
 - delete the uploaded object from storage
 - record an `import_runs` summary row
@@ -87,11 +88,11 @@ Application behavior:
 Key fields:
 
 - `user_id`: owner of the row
-- `source_uid`: stable book identifier from the source database
+- `source_hash`: stable book identifier from the source database
 - `title`: imported book title
 - `authors`: flattened author list as a single text field
 
-Uniqueness is enforced by `(user_id, source_uid)`.
+Uniqueness is enforced by `(user_id, source_hash)`.
 
 ### Bookmarks
 
@@ -135,24 +136,30 @@ The current import pipeline is synchronous inside the request lifecycle.
 2. The server validates the bearer token.
 3. The raw file is uploaded to the `imports` storage bucket.
 4. The file bytes are parsed with `sql.js`.
-5. Books are read from `BookUid`, `Books`, `BookAuthor`, and `Authors`.
-6. Bookmarks are read from `Bookmarks` and mapped to application bookmark rows.
-7. Books are upserted by `(user_id, source_uid)`.
-8. Returned book ids are used to map bookmark rows to stored books.
-9. Bookmarks are upserted by `(user_id, source_uid)`.
-10. The uploaded storage object is deleted.
-11. An `import_runs` row is inserted.
+5. Books are read from `BookHash`, `Books`, `BookAuthor`, and `Authors`.
+6. When multiple `BookHash` rows share the latest timestamp for one book, the lexicographically smallest hash is selected deterministically.
+7. Bookmarks are read from `Bookmarks` and mapped to application bookmark rows.
+8. Duplicate rows inside the parsed payload are collapsed before database upserts.
+9. Books are upserted by `(user_id, source_hash)`.
+10. Returned book ids are used to map bookmark rows to stored books.
+11. Bookmarks are upserted by `(user_id, source_uid)`.
+12. The uploaded storage object is deleted.
+13. An `import_runs` row is inserted.
 
 This pipeline favors correctness and deduplication over asynchronous throughput.
 
 ## Source SQLite mapping
 
+The checked-in source schema reference lives in `specs/sqlite-db-structue.sql` and should be treated as the primary reference when updating source-table parsing logic.
+
 The application currently interprets source data as follows:
 
-- `BookUid.uid` becomes the stored `books.source_uid`
+- `BookHash.hash` becomes the stored `books.source_hash`
+- if several `BookHash` rows share the latest timestamp for one `book_id`, the importer selects the lexicographically smallest hash
 - `Books.title` becomes `books.title`
-- `Authors.name` values are flattened into `books.authors`
+- `Authors.name` values are flattened into `books.authors` using `BookAuthor.author_index` order
 - `Bookmarks.uid` becomes `bookmarks.source_uid`
+- `Bookmarks.book_id -> BookHash.book_id -> BookHash.hash` links each bookmark to its stored book
 - `Bookmarks.bookmark_text` becomes `bookmarks.bookmark_text`
 - `Bookmarks.paragraph` and `Bookmarks.word` are used for ordering
 - source `visible` and `style_id` are normalized into the application `bookmark_type`
@@ -199,11 +206,13 @@ Current protections:
 - uploaded files are intended to be short-lived
 - the client depends on environment variables for Supabase project URL and keys
 - production schema management is migration-driven through the `supabase` directory
+- the server logs structured import diagnostics, duplicate summaries, and failure details to the console
+- the browser client logs import request failures and responses to the browser console
 
 ## Current limitations
 
 - no background worker or queue for large imports
 - no dedicated import history UI
-- no automated conflict reporting beyond route errors and import summary fields
+- no UI for inspecting import diagnostics beyond the current upload message and browser console
 - no multi-source reconciliation beyond per-user UID deduplication
 - no server-side synchronization for browser-local appearance preferences
