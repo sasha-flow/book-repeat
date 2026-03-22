@@ -47,9 +47,10 @@ Its responsibilities are:
 
 - validate that a file exists in the request
 - validate the caller by resolving the bearer token through Supabase Auth
-- upload the raw file into the configured Supabase Storage bucket
+- upload the raw file into the configured Supabase Storage bucket under a request-scoped object key
 - parse the SQLite payload on the server
-- log detailed import diagnostics and failures to the server console
+- resolve large source-hash alias lookups in bounded batches so Supabase PostgREST requests do not exceed URI limits
+- log detailed request-scoped import diagnostics, stage transitions, cleanup attempts, and normalized failures to the server console
 - upsert books and bookmarks into Postgres
 - delete the uploaded object from storage
 - record an `import_runs` summary row
@@ -151,8 +152,8 @@ Current protections:
 - uploaded files are intended to be short-lived
 - the client depends on environment variables for Supabase project URL and keys
 - production schema management is migration-driven through the `supabase` directory
-- the server logs structured import diagnostics, duplicate summaries, and failure details to the console
-- the browser client logs import request failures and responses to the browser console
+- the server logs request-scoped JSON import diagnostics, duplicate summaries, bounded alias-lookup metrics, and normalized failure details to the console
+- the browser client logs import request failures and responses to the browser console while keeping user-facing failure text generic
 
 ## Current limitations
 

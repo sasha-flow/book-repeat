@@ -758,7 +758,7 @@ export function AppClient() {
         stack: error instanceof Error ? (error.stack ?? null) : null,
       });
       setUploadMessage(
-        error instanceof Error ? error.message : "Import failed",
+        "Import failed before the server returned a response. Check browser and server logs for details.",
       );
     }
   };

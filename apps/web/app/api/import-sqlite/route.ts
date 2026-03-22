@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
+  buildImportFailurePayload,
+  createImportRequestId,
+  getExistingAliasesBatched,
+  logImportEvent,
+  normalizeImportError,
+  type ImportLogContext,
+} from "../../../lib/import-route-helpers";
+import {
   planCanonicalBookImports,
   type CanonicalBookImportGroup,
-  type ExistingBookHashAlias,
 } from "../../../lib/book-import-plan";
 import { parseSqlitePayload } from "../../../lib/sqlite-import";
 import { getSupabaseServiceClient } from "../../../lib/supabase/service";
@@ -67,41 +74,44 @@ async function cleanupUploadedFile(
   serviceClient: ReturnType<typeof getSupabaseServiceClient>,
   bucket: string,
   filePath: string,
+  context: ImportLogContext,
 ) {
+  logImportEvent("info", "cleanup started", {
+    ...context,
+    stage: "cleanup-uploaded-file",
+  });
+
   const { error } = await serviceClient.storage.from(bucket).remove([filePath]);
-  return error?.message ?? null;
-}
-
-async function getExistingAliases(
-  serviceClient: ReturnType<typeof getSupabaseServiceClient>,
-  userId: string,
-  sourceHashes: string[],
-): Promise<{ data: ExistingBookHashAlias[]; error: string | null }> {
-  if (sourceHashes.length === 0) {
-    return { data: [], error: null };
-  }
-
-  const { data, error } = await serviceClient
-    .from("book_source_hashes")
-    .select("source_hash, book_id")
-    .eq("user_id", userId)
-    .in("source_hash", sourceHashes);
 
   if (error) {
-    return { data: [], error: error.message };
+    logImportEvent(
+      "warn",
+      "cleanup failed",
+      {
+        ...context,
+        stage: "cleanup-uploaded-file",
+      },
+      {
+        error: normalizeImportError(error),
+      },
+    );
+
+    return error;
   }
 
-  return {
-    data: (data ?? []) as ExistingBookHashAlias[],
-    error: null,
-  };
+  logImportEvent("info", "cleanup completed", {
+    ...context,
+    stage: "cleanup-uploaded-file",
+  });
+
+  return null;
 }
 
 async function createCanonicalBook(
   serviceClient: ReturnType<typeof getSupabaseServiceClient>,
   userId: string,
   group: CanonicalBookImportGroup,
-): Promise<{ id: string | null; error: string | null }> {
+): Promise<{ id: string | null; error: unknown }> {
   const { data, error } = await serviceClient
     .from("books")
     .insert({
@@ -114,7 +124,7 @@ async function createCanonicalBook(
 
   return {
     id: error ? null : ((data as { id: string } | null)?.id ?? null),
-    error: error?.message ?? null,
+    error,
   };
 }
 
@@ -123,7 +133,7 @@ async function updateCanonicalBookMetadata(
   userId: string,
   bookId: string,
   group: CanonicalBookImportGroup,
-): Promise<string | null> {
+): Promise<unknown> {
   const { error } = await serviceClient
     .from("books")
     .update({
@@ -133,7 +143,7 @@ async function updateCanonicalBookMetadata(
     .eq("user_id", userId)
     .eq("id", bookId);
 
-  return error?.message ?? null;
+  return error;
 }
 
 async function mergeCanonicalBooks(
@@ -141,7 +151,7 @@ async function mergeCanonicalBooks(
   userId: string,
   winnerBookId: string,
   loserBookIds: string[],
-): Promise<{ data: MergeBooksRpcResult | null; error: string | null }> {
+): Promise<{ data: MergeBooksRpcResult | null; error: unknown }> {
   if (loserBookIds.length === 0) {
     return {
       data: {
@@ -162,55 +172,136 @@ async function mergeCanonicalBooks(
 
   return {
     data: error ? null : ((data as MergeBooksRpcResult | null) ?? null),
-    error: error?.message ?? null,
+    error,
   };
 }
 
+function getImportFileExtension(fileName: string): string {
+  const trimmedName = fileName.trim();
+  const dotIndex = trimmedName.lastIndexOf(".");
+
+  if (dotIndex <= 0 || dotIndex === trimmedName.length - 1) {
+    return ".sqlite";
+  }
+
+  const extension = trimmedName.slice(dotIndex).toLowerCase();
+
+  if (extension.length > 16) {
+    return ".sqlite";
+  }
+
+  return extension;
+}
+
+function buildImportStorageFilePath(
+  userId: string,
+  requestId: string,
+  fileName: string,
+): string {
+  return `${userId}/${Date.now()}-${requestId}${getImportFileExtension(fileName)}`;
+}
+
 export async function POST(request: Request) {
+  const requestId = createImportRequestId();
+  const bucket = process.env.SUPABASE_IMPORT_BUCKET ?? "imports";
+  let currentStage = "request-received";
+  let importContext: ImportLogContext = {
+    requestId,
+    stage: currentStage,
+    userId: null,
+    fileName: null,
+    fileSize: null,
+    bucket,
+    filePath: null,
+  };
+
   try {
+    logImportEvent("info", "request received", importContext, {
+      contentLength: request.headers.get("content-length"),
+      contentType: request.headers.get("content-type"),
+      hasAuthorizationHeader: Boolean(request.headers.get("authorization")),
+    });
+
     const accessToken = request.headers
       .get("authorization")
       ?.replace("Bearer ", "");
 
     if (!accessToken) {
+      logImportEvent("warn", "authorization token missing", importContext);
       return NextResponse.json(
         { error: "Missing authorization token" },
         { status: 401 },
       );
     }
 
+    currentStage = "form-data-parse";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "form data parse started", importContext);
+
     const formData = await request.formData();
     const sourceFile = formData.get("file");
+
+    logImportEvent("info", "form data parsed", importContext, {
+      hasFileField: sourceFile instanceof File,
+    });
+
     const parsedFile = fileSchema.safeParse(sourceFile);
 
     if (!parsedFile.success) {
+      logImportEvent("warn", "file validation failed", importContext, {
+        issues: parsedFile.error.issues,
+      });
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
     const file = parsedFile.data;
+    importContext = {
+      ...importContext,
+      fileName: file.name,
+      fileSize: file.size,
+    };
     const serviceClient = getSupabaseServiceClient();
+
+    currentStage = "auth-user";
+    importContext = { ...importContext, stage: currentStage };
 
     const { data: authData, error: authError } =
       await serviceClient.auth.getUser(accessToken);
 
     if (authError || !authData.user) {
+      logImportEvent("warn", "authorization failed", importContext, {
+        error: authError ? normalizeImportError(authError) : null,
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userId = authData.user.id;
-    const filePath = `${userId}/${Date.now()}-${file.name}`;
-    const bucket = process.env.SUPABASE_IMPORT_BUCKET ?? "imports";
-
-    console.info("[import-sqlite] import started", {
+    const filePath = buildImportStorageFilePath(userId, requestId, file.name);
+    importContext = {
+      ...importContext,
       userId,
-      fileName: file.name,
-      fileSize: file.size,
       bucket,
       filePath,
+    };
+
+    currentStage = "import-started";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "import started", importContext, {
+      originalFileName: file.name,
     });
 
+    currentStage = "read-buffer";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "file buffer read started", importContext);
     const fileBuffer = await file.arrayBuffer();
 
+    logImportEvent("info", "file buffer read completed", importContext, {
+      bufferBytes: fileBuffer.byteLength,
+    });
+
+    currentStage = "storage-upload";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "storage upload started", importContext);
     const { error: uploadError } = await serviceClient.storage
       .from(bucket)
       .upload(filePath, fileBuffer, {
@@ -219,19 +310,24 @@ export async function POST(request: Request) {
       });
 
     if (uploadError) {
-      console.error("[import-sqlite] upload failed", {
-        userId,
-        fileName: file.name,
-        filePath,
-        bucket,
-        error: uploadError.message,
+      logImportEvent("error", "storage upload failed", importContext, {
+        error: normalizeImportError(uploadError),
       });
       return NextResponse.json(
-        { error: `Upload failed: ${uploadError.message}` },
+        buildImportFailurePayload({
+          requestId,
+          stage: currentStage,
+          publicMessage: "Upload failed.",
+        }),
         { status: 400 },
       );
     }
 
+    logImportEvent("info", "storage upload completed", importContext);
+
+    currentStage = "parse-sqlite";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "sqlite parsing started", importContext);
     const parsedPayload = await parseSqlitePayload(fileBuffer);
     const parsedSourceBookDuplicates = summarizeDuplicateKeys(
       parsedPayload.books,
@@ -254,9 +350,7 @@ export async function POST(request: Request) {
       (entry) => entry.sourceHash,
     ).map((entry) => entry.sourceHash);
 
-    console.info("[import-sqlite] parsed payload", {
-      userId,
-      fileName: file.name,
+    logImportEvent("info", "sqlite parsing completed", importContext, {
       sourceTables: parsedPayload.diagnostics.sourceTables,
       parsedBooks: parsedPayload.books.length,
       parsedBookmarks: parsedPayload.bookmarks.length,
@@ -267,46 +361,77 @@ export async function POST(request: Request) {
       bookHashDiagnostics: parsedPayload.diagnostics.bookHash,
     });
 
-    const { data: existingAliases, error: aliasesLookupError } =
-      await getExistingAliases(serviceClient, userId, allSourceHashes);
+    currentStage = "alias-lookup";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "alias lookup started", importContext, {
+      sourceHashCount: allSourceHashes.length,
+    });
+
+    const {
+      data: existingAliases,
+      error: aliasesLookupError,
+      chunkCount,
+      chunkSizes,
+    } = await getExistingAliasesBatched(serviceClient, userId, allSourceHashes);
 
     if (aliasesLookupError) {
-      const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
-
-      console.error("[import-sqlite] alias lookup failed", {
-        userId,
-        fileName: file.name,
+      const cleanupError = await cleanupUploadedFile(
+        serviceClient,
+        bucket,
         filePath,
+        importContext,
+      );
+
+      logImportEvent("error", "alias lookup failed", importContext, {
         sourceHashCount: allSourceHashes.length,
-        cleanupError,
-        error: aliasesLookupError,
+        chunkCount,
+        chunkSizes,
+        cleanupFailed: cleanupError !== null,
+        error: normalizeImportError(aliasesLookupError),
       });
 
       return NextResponse.json(
-        {
-          error: `Books import failed: ${aliasesLookupError}`,
+        buildImportFailurePayload({
+          requestId,
+          stage: currentStage,
+          publicMessage: "Books import failed.",
           details: {
-            stage: "alias-lookup",
             sourceHashCount: allSourceHashes.length,
-            cleanupError,
+            chunkCount,
+            chunkSizes,
+            cleanupFailed: cleanupError !== null,
           },
-        },
+        }),
         { status: 400 },
       );
     }
 
-    const importPlan = planCanonicalBookImports(parsedPayload.books, existingAliases);
+    logImportEvent("info", "alias lookup completed", importContext, {
+      sourceHashCount: allSourceHashes.length,
+      matchedAliases: existingAliases.length,
+      chunkCount,
+      chunkSizes,
+    });
+
+    const importPlan = planCanonicalBookImports(
+      parsedPayload.books,
+      existingAliases,
+    );
     const metadataConflictGroups = importPlan.groups
       .filter((group) => group.hasMetadataConflicts)
       .map((group) => group.sourceBookIds);
 
-    console.info("[import-sqlite] canonical plan", {
-      userId,
-      fileName: file.name,
+    currentStage = "canonical-plan";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "canonical plan ready", importContext, {
       matchedAliases: existingAliases.length,
       groupCount: importPlan.groups.length,
-      groupsCreatingBooks: importPlan.groups.filter((group) => group.winnerBookId === null).length,
-      groupsMergingBooks: importPlan.groups.filter((group) => group.loserBookIds.length > 0).length,
+      groupsCreatingBooks: importPlan.groups.filter(
+        (group) => group.winnerBookId === null,
+      ).length,
+      groupsMergingBooks: importPlan.groups.filter(
+        (group) => group.loserBookIds.length > 0,
+      ).length,
       metadataConflictGroups,
       groups: importPlan.groups,
     });
@@ -320,29 +445,45 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const { id, error } = await createCanonicalBook(serviceClient, userId, group);
+      currentStage = "book-create";
+      importContext = { ...importContext, stage: currentStage };
+      const { id, error } = await createCanonicalBook(
+        serviceClient,
+        userId,
+        group,
+      );
 
       if (error || !id) {
-        const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
-
-        console.error("[import-sqlite] canonical book creation failed", {
-          userId,
-          fileName: file.name,
+        const cleanupError = await cleanupUploadedFile(
+          serviceClient,
+          bucket,
           filePath,
-          group,
-          cleanupError,
-          error: error ?? "Book insert returned no id",
-        });
+          importContext,
+        );
+
+        logImportEvent(
+          "error",
+          "canonical book creation failed",
+          importContext,
+          {
+            group,
+            cleanupFailed: cleanupError !== null,
+            error: error
+              ? normalizeImportError(error)
+              : "Book insert returned no id",
+          },
+        );
 
         return NextResponse.json(
-          {
-            error: `Books import failed: ${error ?? "Book insert returned no id"}`,
+          buildImportFailurePayload({
+            requestId,
+            stage: currentStage,
+            publicMessage: "Books import failed.",
             details: {
-              stage: "book-create",
               group,
-              cleanupError,
+              cleanupFailed: cleanupError !== null,
             },
-          },
+          }),
           { status: 400 },
         );
       }
@@ -364,6 +505,8 @@ export async function POST(request: Request) {
         continue;
       }
 
+      currentStage = "book-merge";
+      importContext = { ...importContext, stage: currentStage };
       const { data, error } = await mergeCanonicalBooks(
         serviceClient,
         userId,
@@ -372,28 +515,33 @@ export async function POST(request: Request) {
       );
 
       if (error || !data) {
-        const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
-
-        console.error("[import-sqlite] canonical book merge failed", {
-          userId,
-          fileName: file.name,
+        const cleanupError = await cleanupUploadedFile(
+          serviceClient,
+          bucket,
           filePath,
+          importContext,
+        );
+
+        logImportEvent("error", "canonical book merge failed", importContext, {
           winnerBookId,
           loserBookIds: group.loserBookIds,
-          cleanupError,
-          error: error ?? "Merge RPC returned no data",
+          cleanupFailed: cleanupError !== null,
+          error: error
+            ? normalizeImportError(error)
+            : "Merge RPC returned no data",
         });
 
         return NextResponse.json(
-          {
-            error: `Books import failed: ${error ?? "Merge RPC returned no data"}`,
+          buildImportFailurePayload({
+            requestId,
+            stage: currentStage,
+            publicMessage: "Books import failed.",
             details: {
-              stage: "book-merge",
               winnerBookId,
               loserBookIds: group.loserBookIds,
-              cleanupError,
+              cleanupFailed: cleanupError !== null,
             },
-          },
+          }),
           { status: 400 },
         );
       }
@@ -414,6 +562,8 @@ export async function POST(request: Request) {
         continue;
       }
 
+      currentStage = "book-metadata-update";
+      importContext = { ...importContext, stage: currentStage };
       const error = await updateCanonicalBookMetadata(
         serviceClient,
         userId,
@@ -422,30 +572,43 @@ export async function POST(request: Request) {
       );
 
       if (error) {
-        metadataUpdateFailures.push({ bookId, error });
+        metadataUpdateFailures.push({
+          bookId,
+          error: JSON.stringify(normalizeImportError(error)),
+        });
       }
     }
 
     if (metadataUpdateFailures.length > 0) {
-      const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
-
-      console.error("[import-sqlite] canonical book metadata update failed", {
-        userId,
-        fileName: file.name,
+      currentStage = "book-metadata-update";
+      importContext = { ...importContext, stage: currentStage };
+      const cleanupError = await cleanupUploadedFile(
+        serviceClient,
+        bucket,
         filePath,
-        failures: metadataUpdateFailures,
-        cleanupError,
-      });
+        importContext,
+      );
+
+      logImportEvent(
+        "error",
+        "canonical book metadata update failed",
+        importContext,
+        {
+          failures: metadataUpdateFailures,
+          cleanupFailed: cleanupError !== null,
+        },
+      );
 
       return NextResponse.json(
-        {
-          error: `Books import failed: ${metadataUpdateFailures[0]?.error ?? "Metadata update failed"}`,
+        buildImportFailurePayload({
+          requestId,
+          stage: currentStage,
+          publicMessage: "Books import failed.",
           details: {
-            stage: "book-metadata-update",
             failures: metadataUpdateFailures,
-            cleanupError,
+            cleanupFailed: cleanupError !== null,
           },
-        },
+        }),
         { status: 400 },
       );
     }
@@ -467,6 +630,8 @@ export async function POST(request: Request) {
       (row) => row.source_hash,
     );
 
+    currentStage = "alias-upsert";
+    importContext = { ...importContext, stage: currentStage };
     const { error: aliasUpsertError } = aliasRows.length
       ? await serviceClient
           .from("book_source_hashes")
@@ -474,33 +639,39 @@ export async function POST(request: Request) {
       : { error: null };
 
     if (aliasUpsertError) {
-      const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
-
-      console.error("[import-sqlite] alias upsert failed", {
-        userId,
-        fileName: file.name,
+      const cleanupError = await cleanupUploadedFile(
+        serviceClient,
+        bucket,
         filePath,
+        importContext,
+      );
+
+      logImportEvent("error", "alias upsert failed", importContext, {
         aliasRows: aliasRows.length,
-        cleanupError,
-        error: aliasUpsertError.message,
+        cleanupFailed: cleanupError !== null,
+        error: normalizeImportError(aliasUpsertError),
       });
 
       return NextResponse.json(
-        {
-          error: `Books import failed: ${aliasUpsertError.message}`,
+        buildImportFailurePayload({
+          requestId,
+          stage: currentStage,
+          publicMessage: "Books import failed.",
           details: {
-            stage: "alias-upsert",
             aliasRows: aliasRows.length,
-            cleanupError,
+            cleanupFailed: cleanupError !== null,
           },
-        },
+        }),
         { status: 400 },
       );
     }
 
     const booksMap = new Map<number, string>();
 
-    for (const [sourceBookId, groupIndex] of importPlan.sourceBookToGroup.entries()) {
+    for (const [
+      sourceBookId,
+      groupIndex,
+    ] of importPlan.sourceBookToGroup.entries()) {
       const finalBookId = finalBookIdsByGroupIndex.get(groupIndex);
 
       if (finalBookId) {
@@ -531,76 +702,101 @@ export async function POST(request: Request) {
         };
       })
       .filter((row) => row !== null);
-    const unmappedBookmarkCount = parsedPayload.bookmarks.length - rawBookmarkRows.length;
+    const unmappedBookmarkCount =
+      parsedPayload.bookmarks.length - rawBookmarkRows.length;
     const bookmarkRows = dedupeRowsByKey(
       rawBookmarkRows,
       (bookmark) => bookmark.source_uid,
     );
 
     if (bookmarkRows.length !== rawBookmarkRows.length) {
-      console.warn("[import-sqlite] deduplicated bookmark rows before upsert", {
-        userId,
-        fileName: file.name,
-        removedRows: rawBookmarkRows.length - bookmarkRows.length,
-        duplicates: summarizeDuplicateKeys(
-          rawBookmarkRows,
-          (bookmark) => bookmark.source_uid,
-        ),
-      });
+      logImportEvent(
+        "warn",
+        "deduplicated bookmark rows before upsert",
+        importContext,
+        {
+          removedRows: rawBookmarkRows.length - bookmarkRows.length,
+          duplicates: summarizeDuplicateKeys(
+            rawBookmarkRows,
+            (bookmark) => bookmark.source_uid,
+          ),
+        },
+      );
     }
 
     if (unmappedBookmarkCount > 0) {
-      console.warn("[import-sqlite] skipped bookmarks without canonical book mapping", {
-        userId,
-        fileName: file.name,
-        unmappedBookmarkCount,
-      });
+      logImportEvent(
+        "warn",
+        "skipped bookmarks without canonical book mapping",
+        importContext,
+        {
+          unmappedBookmarkCount,
+        },
+      );
     }
 
+    currentStage = "bookmarks-upsert";
+    importContext = { ...importContext, stage: currentStage };
     const { error: bookmarksError } = await serviceClient
       .from("bookmarks")
       .upsert(bookmarkRows, { onConflict: "user_id,source_uid" });
 
-    const deleteError = await cleanupUploadedFile(serviceClient, bucket, filePath);
+    const deleteError = await cleanupUploadedFile(
+      serviceClient,
+      bucket,
+      filePath,
+      importContext,
+    );
 
     if (bookmarksError) {
-      console.error("[import-sqlite] bookmarks import failed", {
-        userId,
-        fileName: file.name,
-        filePath,
+      logImportEvent("error", "bookmarks import failed", importContext, {
         parsedBookmarks: parsedPayload.bookmarks.length,
         bookmarkRows: bookmarkRows.length,
         unmappedBookmarkCount,
         parsedBookmarkDuplicates,
-        deleteError,
-        error: bookmarksError.message,
+        cleanupFailed: deleteError !== null,
+        error: normalizeImportError(bookmarksError),
       });
       return NextResponse.json(
-        {
-          error: `Bookmarks import failed: ${bookmarksError.message}`,
+        buildImportFailurePayload({
+          requestId,
+          stage: currentStage,
+          publicMessage: "Bookmarks import failed.",
           details: {
             parsedBookmarks: parsedPayload.bookmarks.length,
             dedupedBookmarks: bookmarkRows.length,
             unmappedBookmarkCount,
             parsedBookmarkDuplicates,
-            deleteError,
+            cleanupFailed: deleteError !== null,
           },
-        },
+        }),
         { status: 400 },
       );
     }
 
-    await serviceClient.from("import_runs").insert({
-      user_id: userId,
-      file_name: file.name,
-      books_count: importPlan.groups.length,
-      bookmarks_count: bookmarkRows.length,
-      delete_error: deleteError,
-    });
+    currentStage = "record-import-run";
+    importContext = { ...importContext, stage: currentStage };
+    const { error: importRunError } = await serviceClient
+      .from("import_runs")
+      .insert({
+        user_id: userId,
+        file_name: file.name,
+        books_count: importPlan.groups.length,
+        bookmarks_count: bookmarkRows.length,
+        delete_error: deleteError
+          ? JSON.stringify(normalizeImportError(deleteError))
+          : null,
+      });
 
-    console.info("[import-sqlite] import completed", {
-      userId,
-      fileName: file.name,
+    if (importRunError) {
+      logImportEvent("warn", "import run record failed", importContext, {
+        error: normalizeImportError(importRunError),
+      });
+    }
+
+    currentStage = "import-completed";
+    importContext = { ...importContext, stage: currentStage };
+    logImportEvent("info", "import completed", importContext, {
       canonicalBooks: importPlan.groups.length,
       createdBooks: createdBookIds.length,
       mergedGroups: mergeResults.length,
@@ -608,29 +804,37 @@ export async function POST(request: Request) {
       bookmarks: bookmarkRows.length,
       unmappedBookmarkCount,
       mergeResults,
-      fileDeleted: !deleteError,
-      deleteError,
+      fileDeleted: deleteError === null,
+      cleanupFailed: deleteError !== null,
+      importRunRecorded: importRunError === null,
     });
 
     return NextResponse.json({
+      requestId,
       books: importPlan.groups.length,
       bookmarks: bookmarkRows.length,
       createdBooks: createdBookIds.length,
       mergedGroups: mergeResults.length,
       aliasRows: aliasRows.length,
       unmappedBookmarks: unmappedBookmarkCount,
-      fileDeleted: !deleteError,
-      deleteError,
+      fileDeleted: deleteError === null,
+      deleteError:
+        deleteError === null
+          ? null
+          : "File cleanup failed. Check server logs for details.",
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unexpected import failure";
-
-    console.error("[import-sqlite] unexpected failure", {
-      error: message,
-      stack: error instanceof Error ? (error.stack ?? null) : null,
+    logImportEvent("error", "unexpected failure", importContext, {
+      error: normalizeImportError(error),
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      buildImportFailurePayload({
+        requestId,
+        stage: currentStage,
+        publicMessage: "Import failed unexpectedly.",
+      }),
+      { status: 500 },
+    );
   }
 }

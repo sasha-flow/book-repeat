@@ -10,14 +10,17 @@ This feature covers the end-to-end import of a source SQLite bookmark database i
 - the client sends the file to the import API route together with the current auth token
 - the server uploads the file to the `imports` bucket
 - the server parses source books, all `BookHash` rows for each source book, authors, and bookmarks from SQLite
+- the server stores the uploaded object under a request-scoped storage key instead of the original filename
 - the server resolves canonical books by overlapping source hash sets stored in `book_source_hashes`
+- canonical-book alias lookup is split into bounded batches so large imports do not exceed PostgREST URL limits
 - if one imported hash set overlaps multiple existing canonical books, the importer auto-merges them into one winner before writing aliases and bookmarks
 - duplicate bookmark rows inside the parsed payload are removed before database upserts
 - canonical books are created or updated in `books`, while source hashes are upserted by `(user_id, source_hash)` in `book_source_hashes`
 - bookmarks are upserted by `(user_id, source_uid)` after mapping source `book_id` values to canonical book ids
 - the uploaded storage object is deleted after processing
 - the server writes an `import_runs` summary row
-- the route logs structured parsing diagnostics, canonical-book planning, merge results, and failures to the server console, and the browser logs failed import responses to the browser console
+- the route logs request-scoped import stages, parsing diagnostics, alias-lookup batching, canonical-book planning, merge results, cleanup attempts, and normalized exception details to the server console as serialized JSON
+- the browser logs failed import responses and request exceptions to the browser console, while the UI shows only generic failure text with a request reference id
 
 ## Source mapping rules
 
@@ -38,7 +41,7 @@ This feature covers the end-to-end import of a source SQLite bookmark database i
 - importing a file that bridges multiple existing canonical books should merge them automatically for that user
 - imported files are temporary processing artifacts and should not remain in storage after a successful cleanup
 - import success reporting includes counts and storage cleanup status
-- import diagnostics include duplicate summaries, `BookHash` distribution diagnostics, canonical merge planning, and merge execution results in server logs
+- import diagnostics include duplicate summaries, `BookHash` distribution diagnostics, bounded alias-lookup chunk sizes, canonical merge planning, merge execution results, and normalized exception details in server logs
 
 ## Data dependencies
 
