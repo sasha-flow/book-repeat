@@ -9,6 +9,8 @@ This feature covers classification of bookmarks into application-specific types 
 - a long press or right click on a bookmark opens a modal bottom sheet
 - the sheet exposes a copy action and three target types: `default`, `header`, and `hidden`
 - the sheet labels `default` as `Text` in the UI
+- the sheet uses an opaque background surface so bookmark text behind it does not bleed through
+- on desktop-width viewports, the sheet stays in the same centered vertical column as the reader content
 - selecting an action updates the stored bookmark record
 - the active bookmark type is visually indicated inside the sheet
 - the sheet closes after the update action is triggered

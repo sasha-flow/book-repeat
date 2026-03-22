@@ -50,6 +50,7 @@ import {
   applyBookmarkFilter,
   nextBookmarkFilter,
 } from "../lib/bookmark-filters";
+import { getBookmarkContextMenuLayout } from "../lib/bookmark-context-menu-styles";
 import { getOpaqueHeaderSurfaceStyle } from "../lib/book-detail-styles";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
 import { ThemeToggle } from "./theme-toggle";
@@ -513,6 +514,8 @@ function BookmarkContextMenu({
     return null;
   }
 
+  const menuLayout = getBookmarkContextMenuLayout();
+
   const actions: Array<{
     type: BookmarkType;
     label: string;
@@ -527,23 +530,15 @@ function BookmarkContextMenu({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-40 bg-black/50"
+        className={menuLayout.backdropClassName}
         onClick={onClose}
         aria-label="Close context menu"
       />
-      <div className="fixed inset-x-0 bottom-0 z-50">
-        <div className="mx-auto w-full" style={{ maxWidth: 393.256 }}>
+      <div className={menuLayout.railClassName} style={menuLayout.overlayStyle}>
+        <div className={menuLayout.frameClassName} style={menuLayout.frameStyle}>
           <div
-            className="bg-background"
-            style={{
-              minHeight: 281.978,
-              borderTopWidth: 1.108,
-              borderTopStyle: "solid",
-              borderTopColor: "var(--border)",
-              borderTopLeftRadius: 10,
-              borderTopRightRadius: 10,
-              boxShadow: "0 -10px 30px rgba(3, 2, 19, 0.08)",
-            }}
+            className={menuLayout.surfaceClassName}
+            style={menuLayout.surfaceStyle}
             role="dialog"
             aria-modal="true"
             aria-label="Bookmark actions"
