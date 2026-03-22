@@ -3,7 +3,8 @@
 ## What it does
 
 - Authenticates users with Supabase Auth.
-- Shows mobile-first app shell with bottom navigation: `Books`, `Upload`, `User`.
+- Supports sign-in and sign-up with Supabase Auth.
+- Shows mobile-first app shell with bottom navigation: `Books`, `Upload`, `Profile`.
 - Imports uploaded SQLite bookmark files to Supabase (`books`, `book_source_hashes`, and `bookmarks`), deduplicated by canonical book hash sets and bookmark UID.
 - Allows per-book bookmark reading with filter toggle and bookmark type context menu (`default`, `header`, `hidden`).
 

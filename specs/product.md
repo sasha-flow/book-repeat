@@ -17,14 +17,14 @@ This document describes the current implemented behavior only.
 ## Primary user journey
 
 1. The user opens the application and sees the authentication screen if there is no active session.
-2. The user signs in with email and password (no ability to create an account now).
+2. The user signs in with email and password, or switches the auth card into sign-up mode to create an account.
 3. After authentication, the user lands in the mobile-first app shell.
 4. The user uploads a SQLite file from the `Upload` tab.
 5. The system imports books and bookmarks into the user's own dataset.
 6. The user opens the `Books` tab to browse imported books.
 7. The user opens a book, filters visible bookmarks, and optionally changes bookmark types.
-8. The user opens the `User` tab to inspect the current account and sign out.
-9. The user can switch the application appearance between `Light`, `Dark`, and `System` from the `User` tab.
+8. The user opens the `Profile` tab to inspect the current account and sign out.
+9. The user can switch the application appearance between `Light`, `Dark`, and `System` from the `Profile` tab.
 
 ## Signed-out experience
 
@@ -33,8 +33,11 @@ When the user is not authenticated, the app shows a single card-based authentica
 Supported actions:
 
 - sign in with email and password
+- switch to sign-up mode and create an account with email and password
 
-The signed-out screen is a gate for the application. The books list, upload flow, and user area are not available until a session exists.
+The signed-out screen is a gate for the application. The books list, upload flow, and profile area are not available until a session exists.
+
+If sign-up succeeds without an immediate session, the screen shows a follow-up message that the account was created and the user should check the email verification settings before signing in.
 
 ## Signed-in application shell
 
@@ -42,7 +45,7 @@ The signed-in experience is built around a mobile-first shell with three bottom 
 
 - `Books`
 - `Upload`
-- `User`
+- `Profile`
 
 Product expectations for this shell:
 
@@ -128,9 +131,9 @@ Current behavior:
 
 The upload flow is intended to be repeatable. Re-importing overlapping source files should not create duplicate books or bookmarks for the same user.
 
-## User area
+## Profile area
 
-The `User` area is deliberately small.
+The `Profile` area is deliberately small.
 
 Current behavior:
 
