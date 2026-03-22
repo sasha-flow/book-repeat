@@ -30,41 +30,45 @@ async function createSqlitePayload(statements: string[]): Promise<ArrayBuffer> {
   return Uint8Array.from(exported).buffer;
 }
 
-function sortBooksByHash<T extends { source_hash: string }>(books: T[]): T[] {
+function sortBooksBySourceBookId<T extends { source_book_id: number }>(
+  books: T[],
+): T[] {
   return [...books].sort((left, right) =>
-    left.source_hash.localeCompare(right.source_hash),
+    left.source_book_id - right.source_book_id,
   );
 }
 
-test("parseSqlitePayload reads books from BookHash and preserves author order", async () => {
+test("parseSqlitePayload reads source books with all hashes and preserves author order", async () => {
   const payload = await createSqlitePayload([
     `CREATE TABLE Books (book_id INTEGER PRIMARY KEY, title TEXT);`,
     `CREATE TABLE BookHash (book_id INTEGER NOT NULL, hash TEXT NOT NULL UNIQUE, timestamp INTEGER NOT NULL);`,
     `CREATE TABLE Authors (author_id INTEGER PRIMARY KEY, name TEXT NOT NULL, sort_key TEXT NOT NULL);`,
     `CREATE TABLE BookAuthor (author_id INTEGER NOT NULL, book_id INTEGER NOT NULL, author_index INTEGER NOT NULL);`,
     `INSERT INTO Books (book_id, title) VALUES (1, 'Alpha'), (2, 'Beta');`,
-    `INSERT INTO BookHash (book_id, hash, timestamp) VALUES (1, 'hash-b', 111), (2, 'hash-a', 222);`,
+    `INSERT INTO BookHash (book_id, hash, timestamp) VALUES (1, 'hash-b', 111), (1, 'hash-c', 333), (2, 'hash-a', 222);`,
     `INSERT INTO Authors (author_id, name, sort_key) VALUES (1, 'Second Author', 'second'), (2, 'First Author', 'first');`,
     `INSERT INTO BookAuthor (author_id, book_id, author_index) VALUES (1, 1, 1), (2, 1, 0);`,
   ]);
 
   const parsed = await parseSqlitePayload(payload);
 
-  assert.deepEqual(sortBooksByHash(parsed.books), [
+  assert.deepEqual(sortBooksBySourceBookId(parsed.books), [
     {
-      source_hash: "hash-a",
-      title: "Beta",
-      authors: "",
-    },
-    {
-      source_hash: "hash-b",
+      source_book_id: 1,
       title: "Alpha",
       authors: "First Author, Second Author",
+      source_hashes: ["hash-c", "hash-b"],
+    },
+    {
+      source_book_id: 2,
+      title: "Beta",
+      authors: "",
+      source_hashes: ["hash-a"],
     },
   ]);
 });
 
-test("parseSqlitePayload reads bookmarks and maps them to the owning book hash", async () => {
+test("parseSqlitePayload reads bookmarks and maps them to the owning source book id", async () => {
   const payload = await createSqlitePayload([
     `CREATE TABLE Books (book_id INTEGER PRIMARY KEY, title TEXT);`,
     `CREATE TABLE BookHash (book_id INTEGER NOT NULL, hash TEXT NOT NULL UNIQUE, timestamp INTEGER NOT NULL);`,
@@ -84,7 +88,7 @@ test("parseSqlitePayload reads bookmarks and maps them to the owning book hash",
   assert.deepEqual(parsed.bookmarks, [
     {
       source_uid: "bookmark-default",
-      book_source_hash: "book-hash-7",
+      source_book_id: 7,
       bookmark_text: "Default bookmark",
       paragraph: 3,
       word: 4,
@@ -96,7 +100,7 @@ test("parseSqlitePayload reads bookmarks and maps them to the owning book hash",
     },
     {
       source_uid: "bookmark-header",
-      book_source_hash: "book-hash-7",
+      source_book_id: 7,
       bookmark_text: "Header bookmark",
       paragraph: 6,
       word: 7,
@@ -108,7 +112,7 @@ test("parseSqlitePayload reads bookmarks and maps them to the owning book hash",
     },
     {
       source_uid: "bookmark-hidden",
-      book_source_hash: "book-hash-7",
+      source_book_id: 7,
       bookmark_text: "Hidden bookmark",
       paragraph: 9,
       word: 10,
@@ -121,7 +125,7 @@ test("parseSqlitePayload reads bookmarks and maps them to the owning book hash",
   ]);
 });
 
-test("parseSqlitePayload picks one deterministic latest book hash when timestamps tie", async () => {
+test("parseSqlitePayload keeps every hash for one source book when timestamps tie", async () => {
   const payload = await createSqlitePayload([
     `CREATE TABLE Books (book_id INTEGER PRIMARY KEY, title TEXT);`,
     `CREATE TABLE BookHash (book_id INTEGER NOT NULL, hash TEXT NOT NULL UNIQUE, timestamp INTEGER NOT NULL);`,
@@ -135,16 +139,17 @@ test("parseSqlitePayload picks one deterministic latest book hash when timestamp
 
   assert.deepEqual(parsed.books, [
     {
-      source_hash: "hash-a",
+      source_book_id: 3,
       title: "Tied hash book",
       authors: "",
+      source_hashes: ["hash-a", "hash-z"],
     },
   ]);
 
   assert.deepEqual(parsed.bookmarks, [
     {
       source_uid: "bookmark-tied",
-      book_source_hash: "hash-a",
+      source_book_id: 3,
       bookmark_text: "Only bookmark",
       paragraph: 1,
       word: 2,

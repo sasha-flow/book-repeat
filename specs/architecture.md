@@ -81,52 +81,14 @@ Application behavior:
 
 ## Data model
 
-### Books
+Persistent schema, RLS policies, storage ownership rules, and database-side merge behavior are documented in `specs/db.md`.
 
-`books` stores user-scoped book records imported from the source SQLite database.
+At the architecture level, the key idea is:
 
-Key fields:
-
-- `user_id`: owner of the row
-- `source_hash`: stable book identifier from the source database
-- `title`: imported book title
-- `authors`: flattened author list as a single text field
-
-Uniqueness is enforced by `(user_id, source_hash)`.
-
-### Bookmarks
-
-`bookmarks` stores user-scoped bookmark records linked to a stored book.
-
-Key fields:
-
-- `user_id`: owner of the row
-- `source_uid`: stable bookmark identifier from the source database
-- `book_id`: reference to the imported book
-- `bookmark_text`: imported bookmark text
-- `paragraph` and `word`: source position fields used for ordering
-- `bookmark_type`: application enum with `default`, `header`, and `hidden`
-- source metadata columns copied from the SQLite file for traceability
-
-Uniqueness is enforced by `(user_id, source_uid)`.
-
-### Import runs
-
-`import_runs` stores lightweight summaries of completed import attempts.
-
-It captures:
-
-- user id
-- original file name
-- imported book count
-- imported bookmark count
-- storage deletion error if cleanup failed
-
-### Storage
-
-The `imports` bucket stores uploaded SQLite files temporarily during import processing.
-
-Objects are written under a user-specific path prefix and deleted after processing.
+- `books.id` is the canonical application identity for a user's logical book
+- `book_source_hashes` maps many imported source hashes to one canonical book
+- `bookmarks` always point at canonical books, not transient source identities
+- `import_runs` captures operational summaries rather than domain state
 
 ## Import pipeline
 
@@ -136,39 +98,22 @@ The current import pipeline is synchronous inside the request lifecycle.
 2. The server validates the bearer token.
 3. The raw file is uploaded to the `imports` storage bucket.
 4. The file bytes are parsed with `sql.js`.
-5. Books are read from `BookHash`, `Books`, `BookAuthor`, and `Authors`.
-6. When multiple `BookHash` rows share the latest timestamp for one book, the lexicographically smallest hash is selected deterministically.
-7. Bookmarks are read from `Bookmarks` and mapped to application bookmark rows.
-8. Duplicate rows inside the parsed payload are collapsed before database upserts.
-9. Books are upserted by `(user_id, source_hash)`.
-10. Returned book ids are used to map bookmark rows to stored books.
-11. Bookmarks are upserted by `(user_id, source_uid)`.
-12. The uploaded storage object is deleted.
-13. An `import_runs` row is inserted.
+5. Source books are read from `BookHash`, `Books`, `BookAuthor`, and `Authors`, with every `BookHash.hash` retained for each source `book_id`.
+6. Existing canonical books are resolved through `book_source_hashes` using overlapping source hash sets.
+7. If one imported hash set overlaps multiple canonical books, those canonical books are auto-merged into one deterministic winner.
+8. Bookmarks are read from `Bookmarks` and mapped to canonical application book ids through the import plan.
+9. Source hash aliases are upserted by `(user_id, source_hash)` in `book_source_hashes`.
+10. Bookmarks are upserted by `(user_id, source_uid)`.
+11. The uploaded storage object is deleted.
+12. An `import_runs` row is inserted.
 
 This pipeline favors correctness and deduplication over asynchronous throughput.
 
 ## Source SQLite mapping
 
-The checked-in source schema reference lives in `specs/sqlite-db-structue.sql` and should be treated as the primary reference when updating source-table parsing logic.
+The checked-in source schema reference lives in `specs/sqlite-db-structue.sql`.
 
-The application currently interprets source data as follows:
-
-- `BookHash.hash` becomes the stored `books.source_hash`
-- if several `BookHash` rows share the latest timestamp for one `book_id`, the importer selects the lexicographically smallest hash
-- `Books.title` becomes `books.title`
-- `Authors.name` values are flattened into `books.authors` using `BookAuthor.author_index` order
-- `Bookmarks.uid` becomes `bookmarks.source_uid`
-- `Bookmarks.book_id -> BookHash.book_id -> BookHash.hash` links each bookmark to its stored book
-- `Bookmarks.bookmark_text` becomes `bookmarks.bookmark_text`
-- `Bookmarks.paragraph` and `Bookmarks.word` are used for ordering
-- source `visible` and `style_id` are normalized into the application `bookmark_type`
-
-Normalization rules:
-
-- `visible = 0` maps to `hidden`
-- `style_id = 2` maps to `header` when the bookmark is not hidden
-- all other cases map to `default`
+Detailed source-to-target field mapping and reconciliation rules live in `specs/db.md`.
 
 ## Reader filtering model
 
@@ -196,7 +141,7 @@ Security is primarily enforced through Supabase row-level security and storage p
 
 Current protections:
 
-- `books`, `bookmarks`, and `import_runs` enforce user ownership through RLS policies
+- `books`, `book_source_hashes`, `bookmarks`, and `import_runs` enforce user ownership through RLS policies
 - storage object policies restrict upload, read, and delete operations to objects inside the current user's folder
 - server import writes use a service-role client only after validating the request token
 
@@ -214,5 +159,5 @@ Current protections:
 - no background worker or queue for large imports
 - no dedicated import history UI
 - no UI for inspecting import diagnostics beyond the current upload message and browser console
-- no multi-source reconciliation beyond per-user UID deduplication
+- no manual UI for reviewing or overriding automatic canonical-book merges
 - no server-side synchronization for browser-local appearance preferences

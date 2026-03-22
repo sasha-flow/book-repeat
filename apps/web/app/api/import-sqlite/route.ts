@@ -1,10 +1,22 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  planCanonicalBookImports,
+  type CanonicalBookImportGroup,
+  type ExistingBookHashAlias,
+} from "../../../lib/book-import-plan";
 import { parseSqlitePayload } from "../../../lib/sqlite-import";
 import { getSupabaseServiceClient } from "../../../lib/supabase/service";
 
 const fileSchema = z.instanceof(File);
+
+interface MergeBooksRpcResult {
+  movedAliases: number;
+  deletedAliases: number;
+  movedBookmarks: number;
+  deletedBooks: number;
+}
 
 function summarizeDuplicateKeys<T>(
   rows: T[],
@@ -49,6 +61,109 @@ function dedupeRowsByKey<T>(rows: T[], getKey: (row: T) => string): T[] {
   }
 
   return [...dedupedRows.values()];
+}
+
+async function cleanupUploadedFile(
+  serviceClient: ReturnType<typeof getSupabaseServiceClient>,
+  bucket: string,
+  filePath: string,
+) {
+  const { error } = await serviceClient.storage.from(bucket).remove([filePath]);
+  return error?.message ?? null;
+}
+
+async function getExistingAliases(
+  serviceClient: ReturnType<typeof getSupabaseServiceClient>,
+  userId: string,
+  sourceHashes: string[],
+): Promise<{ data: ExistingBookHashAlias[]; error: string | null }> {
+  if (sourceHashes.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await serviceClient
+    .from("book_source_hashes")
+    .select("source_hash, book_id")
+    .eq("user_id", userId)
+    .in("source_hash", sourceHashes);
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  return {
+    data: (data ?? []) as ExistingBookHashAlias[],
+    error: null,
+  };
+}
+
+async function createCanonicalBook(
+  serviceClient: ReturnType<typeof getSupabaseServiceClient>,
+  userId: string,
+  group: CanonicalBookImportGroup,
+): Promise<{ id: string | null; error: string | null }> {
+  const { data, error } = await serviceClient
+    .from("books")
+    .insert({
+      user_id: userId,
+      title: group.title,
+      authors: group.authors,
+    })
+    .select("id")
+    .single();
+
+  return {
+    id: error ? null : ((data as { id: string } | null)?.id ?? null),
+    error: error?.message ?? null,
+  };
+}
+
+async function updateCanonicalBookMetadata(
+  serviceClient: ReturnType<typeof getSupabaseServiceClient>,
+  userId: string,
+  bookId: string,
+  group: CanonicalBookImportGroup,
+): Promise<string | null> {
+  const { error } = await serviceClient
+    .from("books")
+    .update({
+      title: group.title,
+      authors: group.authors,
+    })
+    .eq("user_id", userId)
+    .eq("id", bookId);
+
+  return error?.message ?? null;
+}
+
+async function mergeCanonicalBooks(
+  serviceClient: ReturnType<typeof getSupabaseServiceClient>,
+  userId: string,
+  winnerBookId: string,
+  loserBookIds: string[],
+): Promise<{ data: MergeBooksRpcResult | null; error: string | null }> {
+  if (loserBookIds.length === 0) {
+    return {
+      data: {
+        movedAliases: 0,
+        deletedAliases: 0,
+        movedBookmarks: 0,
+        deletedBooks: 0,
+      },
+      error: null,
+    };
+  }
+
+  const { data, error } = await serviceClient.rpc("merge_user_books", {
+    target_user_id: userId,
+    winner_book_id: winnerBookId,
+    loser_book_ids: loserBookIds,
+  });
+
+  return {
+    data: error ? null : ((data as MergeBooksRpcResult | null) ?? null),
+    error: error?.message ?? null,
+  };
 }
 
 export async function POST(request: Request) {
@@ -118,15 +233,26 @@ export async function POST(request: Request) {
     }
 
     const parsedPayload = await parseSqlitePayload(fileBuffer);
-
-    const parsedBookDuplicates = summarizeDuplicateKeys(
+    const parsedSourceBookDuplicates = summarizeDuplicateKeys(
       parsedPayload.books,
-      (book) => book.source_hash,
+      (book) => String(book.source_book_id),
+    );
+    const parsedSourceHashDuplicates = summarizeDuplicateKeys(
+      parsedPayload.books.flatMap((book) =>
+        book.source_hashes.map((sourceHash) => ({ sourceHash })),
+      ),
+      (entry) => entry.sourceHash,
     );
     const parsedBookmarkDuplicates = summarizeDuplicateKeys(
       parsedPayload.bookmarks,
       (bookmark) => bookmark.source_uid,
     );
+    const allSourceHashes = dedupeRowsByKey(
+      parsedPayload.books.flatMap((book) =>
+        book.source_hashes.map((sourceHash) => ({ sourceHash })),
+      ),
+      (entry) => entry.sourceHash,
+    ).map((entry) => entry.sourceHash);
 
     console.info("[import-sqlite] parsed payload", {
       userId,
@@ -134,76 +260,257 @@ export async function POST(request: Request) {
       sourceTables: parsedPayload.diagnostics.sourceTables,
       parsedBooks: parsedPayload.books.length,
       parsedBookmarks: parsedPayload.bookmarks.length,
-      parsedBookDuplicates,
+      parsedSourceBookDuplicates,
+      parsedSourceHashDuplicates,
       parsedBookmarkDuplicates,
+      totalSourceHashes: allSourceHashes.length,
       bookHashDiagnostics: parsedPayload.diagnostics.bookHash,
     });
 
-    const rawBookRows = parsedPayload.books.map((book) => ({
-      user_id: userId,
-      source_hash: book.source_hash,
-      title: book.title,
-      authors: book.authors,
-    }));
-    const bookRows = dedupeRowsByKey(rawBookRows, (book) => book.source_hash);
+    const { data: existingAliases, error: aliasesLookupError } =
+      await getExistingAliases(serviceClient, userId, allSourceHashes);
 
-    if (bookRows.length !== rawBookRows.length) {
-      console.warn("[import-sqlite] deduplicated book rows before upsert", {
-        userId,
-        fileName: file.name,
-        removedRows: rawBookRows.length - bookRows.length,
-        duplicates: summarizeDuplicateKeys(
-          rawBookRows,
-          (book) => book.source_hash,
-        ),
-      });
-    }
+    if (aliasesLookupError) {
+      const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
 
-    const { data: booksData, error: booksError } = await serviceClient
-      .from("books")
-      .upsert(bookRows, { onConflict: "user_id,source_hash" })
-      .select("id, source_hash");
-
-    if (booksError) {
-      const { error: cleanupError } = await serviceClient.storage
-        .from(bucket)
-        .remove([filePath]);
-
-      console.error("[import-sqlite] books import failed", {
+      console.error("[import-sqlite] alias lookup failed", {
         userId,
         fileName: file.name,
         filePath,
-        parsedBooks: parsedPayload.books.length,
-        dedupedBooks: bookRows.length,
-        parsedBookDuplicates,
-        cleanupError: cleanupError?.message ?? null,
-        error: booksError.message,
+        sourceHashCount: allSourceHashes.length,
+        cleanupError,
+        error: aliasesLookupError,
       });
 
       return NextResponse.json(
         {
-          error: `Books import failed: ${booksError.message}`,
+          error: `Books import failed: ${aliasesLookupError}`,
           details: {
-            parsedBooks: parsedPayload.books.length,
-            dedupedBooks: bookRows.length,
-            parsedBookDuplicates,
-            cleanupError: cleanupError?.message ?? null,
+            stage: "alias-lookup",
+            sourceHashCount: allSourceHashes.length,
+            cleanupError,
           },
         },
         { status: 400 },
       );
     }
 
-    const booksMap = new Map(
-      (booksData ?? []).map((row: { source_hash: string; id: string }) => [
-        row.source_hash,
-        row.id,
-      ]),
+    const importPlan = planCanonicalBookImports(parsedPayload.books, existingAliases);
+    const metadataConflictGroups = importPlan.groups
+      .filter((group) => group.hasMetadataConflicts)
+      .map((group) => group.sourceBookIds);
+
+    console.info("[import-sqlite] canonical plan", {
+      userId,
+      fileName: file.name,
+      matchedAliases: existingAliases.length,
+      groupCount: importPlan.groups.length,
+      groupsCreatingBooks: importPlan.groups.filter((group) => group.winnerBookId === null).length,
+      groupsMergingBooks: importPlan.groups.filter((group) => group.loserBookIds.length > 0).length,
+      metadataConflictGroups,
+      groups: importPlan.groups,
+    });
+
+    const finalBookIdsByGroupIndex = new Map<number, string>();
+    const createdBookIds: string[] = [];
+
+    for (const [groupIndex, group] of importPlan.groups.entries()) {
+      if (group.winnerBookId !== null) {
+        finalBookIdsByGroupIndex.set(groupIndex, group.winnerBookId);
+        continue;
+      }
+
+      const { id, error } = await createCanonicalBook(serviceClient, userId, group);
+
+      if (error || !id) {
+        const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
+
+        console.error("[import-sqlite] canonical book creation failed", {
+          userId,
+          fileName: file.name,
+          filePath,
+          group,
+          cleanupError,
+          error: error ?? "Book insert returned no id",
+        });
+
+        return NextResponse.json(
+          {
+            error: `Books import failed: ${error ?? "Book insert returned no id"}`,
+            details: {
+              stage: "book-create",
+              group,
+              cleanupError,
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      createdBookIds.push(id);
+      finalBookIdsByGroupIndex.set(groupIndex, id);
+    }
+
+    const mergeResults: Array<{
+      winnerBookId: string;
+      loserBookIds: string[];
+      result: MergeBooksRpcResult;
+    }> = [];
+
+    for (const [groupIndex, group] of importPlan.groups.entries()) {
+      const winnerBookId = finalBookIdsByGroupIndex.get(groupIndex);
+
+      if (!winnerBookId || group.loserBookIds.length === 0) {
+        continue;
+      }
+
+      const { data, error } = await mergeCanonicalBooks(
+        serviceClient,
+        userId,
+        winnerBookId,
+        group.loserBookIds,
+      );
+
+      if (error || !data) {
+        const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
+
+        console.error("[import-sqlite] canonical book merge failed", {
+          userId,
+          fileName: file.name,
+          filePath,
+          winnerBookId,
+          loserBookIds: group.loserBookIds,
+          cleanupError,
+          error: error ?? "Merge RPC returned no data",
+        });
+
+        return NextResponse.json(
+          {
+            error: `Books import failed: ${error ?? "Merge RPC returned no data"}`,
+            details: {
+              stage: "book-merge",
+              winnerBookId,
+              loserBookIds: group.loserBookIds,
+              cleanupError,
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      mergeResults.push({
+        winnerBookId,
+        loserBookIds: group.loserBookIds,
+        result: data,
+      });
+    }
+
+    const metadataUpdateFailures: Array<{ bookId: string; error: string }> = [];
+
+    for (const [groupIndex, group] of importPlan.groups.entries()) {
+      const bookId = finalBookIdsByGroupIndex.get(groupIndex);
+
+      if (!bookId) {
+        continue;
+      }
+
+      const error = await updateCanonicalBookMetadata(
+        serviceClient,
+        userId,
+        bookId,
+        group,
+      );
+
+      if (error) {
+        metadataUpdateFailures.push({ bookId, error });
+      }
+    }
+
+    if (metadataUpdateFailures.length > 0) {
+      const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
+
+      console.error("[import-sqlite] canonical book metadata update failed", {
+        userId,
+        fileName: file.name,
+        filePath,
+        failures: metadataUpdateFailures,
+        cleanupError,
+      });
+
+      return NextResponse.json(
+        {
+          error: `Books import failed: ${metadataUpdateFailures[0]?.error ?? "Metadata update failed"}`,
+          details: {
+            stage: "book-metadata-update",
+            failures: metadataUpdateFailures,
+            cleanupError,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    const aliasRows = dedupeRowsByKey(
+      importPlan.groups.flatMap((group, groupIndex) => {
+        const bookId = finalBookIdsByGroupIndex.get(groupIndex);
+
+        if (!bookId) {
+          return [];
+        }
+
+        return group.sourceHashes.map((sourceHash) => ({
+          user_id: userId,
+          book_id: bookId,
+          source_hash: sourceHash,
+        }));
+      }),
+      (row) => row.source_hash,
     );
+
+    const { error: aliasUpsertError } = aliasRows.length
+      ? await serviceClient
+          .from("book_source_hashes")
+          .upsert(aliasRows, { onConflict: "user_id,source_hash" })
+      : { error: null };
+
+    if (aliasUpsertError) {
+      const cleanupError = await cleanupUploadedFile(serviceClient, bucket, filePath);
+
+      console.error("[import-sqlite] alias upsert failed", {
+        userId,
+        fileName: file.name,
+        filePath,
+        aliasRows: aliasRows.length,
+        cleanupError,
+        error: aliasUpsertError.message,
+      });
+
+      return NextResponse.json(
+        {
+          error: `Books import failed: ${aliasUpsertError.message}`,
+          details: {
+            stage: "alias-upsert",
+            aliasRows: aliasRows.length,
+            cleanupError,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    const booksMap = new Map<number, string>();
+
+    for (const [sourceBookId, groupIndex] of importPlan.sourceBookToGroup.entries()) {
+      const finalBookId = finalBookIdsByGroupIndex.get(groupIndex);
+
+      if (finalBookId) {
+        booksMap.set(sourceBookId, finalBookId);
+      }
+    }
 
     const rawBookmarkRows = parsedPayload.bookmarks
       .map((bookmark) => {
-        const bookId = booksMap.get(bookmark.book_source_hash);
+        const bookId = booksMap.get(bookmark.source_book_id);
 
         if (!bookId) {
           return null;
@@ -224,6 +531,7 @@ export async function POST(request: Request) {
         };
       })
       .filter((row) => row !== null);
+    const unmappedBookmarkCount = parsedPayload.bookmarks.length - rawBookmarkRows.length;
     const bookmarkRows = dedupeRowsByKey(
       rawBookmarkRows,
       (bookmark) => bookmark.source_uid,
@@ -241,13 +549,19 @@ export async function POST(request: Request) {
       });
     }
 
+    if (unmappedBookmarkCount > 0) {
+      console.warn("[import-sqlite] skipped bookmarks without canonical book mapping", {
+        userId,
+        fileName: file.name,
+        unmappedBookmarkCount,
+      });
+    }
+
     const { error: bookmarksError } = await serviceClient
       .from("bookmarks")
       .upsert(bookmarkRows, { onConflict: "user_id,source_uid" });
 
-    const { error: deleteError } = await serviceClient.storage
-      .from(bucket)
-      .remove([filePath]);
+    const deleteError = await cleanupUploadedFile(serviceClient, bucket, filePath);
 
     if (bookmarksError) {
       console.error("[import-sqlite] bookmarks import failed", {
@@ -256,8 +570,9 @@ export async function POST(request: Request) {
         filePath,
         parsedBookmarks: parsedPayload.bookmarks.length,
         bookmarkRows: bookmarkRows.length,
+        unmappedBookmarkCount,
         parsedBookmarkDuplicates,
-        deleteError: deleteError?.message ?? null,
+        deleteError,
         error: bookmarksError.message,
       });
       return NextResponse.json(
@@ -266,8 +581,9 @@ export async function POST(request: Request) {
           details: {
             parsedBookmarks: parsedPayload.bookmarks.length,
             dedupedBookmarks: bookmarkRows.length,
+            unmappedBookmarkCount,
             parsedBookmarkDuplicates,
-            deleteError: deleteError?.message ?? null,
+            deleteError,
           },
         },
         { status: 400 },
@@ -277,25 +593,34 @@ export async function POST(request: Request) {
     await serviceClient.from("import_runs").insert({
       user_id: userId,
       file_name: file.name,
-      books_count: bookRows.length,
+      books_count: importPlan.groups.length,
       bookmarks_count: bookmarkRows.length,
-      delete_error: deleteError?.message ?? null,
+      delete_error: deleteError,
     });
 
     console.info("[import-sqlite] import completed", {
       userId,
       fileName: file.name,
-      books: bookRows.length,
+      canonicalBooks: importPlan.groups.length,
+      createdBooks: createdBookIds.length,
+      mergedGroups: mergeResults.length,
+      aliasRows: aliasRows.length,
       bookmarks: bookmarkRows.length,
+      unmappedBookmarkCount,
+      mergeResults,
       fileDeleted: !deleteError,
-      deleteError: deleteError?.message ?? null,
+      deleteError,
     });
 
     return NextResponse.json({
-      books: bookRows.length,
+      books: importPlan.groups.length,
       bookmarks: bookmarkRows.length,
+      createdBooks: createdBookIds.length,
+      mergedGroups: mergeResults.length,
+      aliasRows: aliasRows.length,
+      unmappedBookmarks: unmappedBookmarkCount,
       fileDeleted: !deleteError,
-      deleteError: deleteError?.message ?? null,
+      deleteError,
     });
   } catch (error) {
     const message =

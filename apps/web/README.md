@@ -4,7 +4,7 @@
 
 - Authenticates users with Supabase Auth.
 - Shows mobile-first app shell with bottom navigation: `Books`, `Upload`, `User`.
-- Imports uploaded SQLite bookmark files to Supabase (`books` + `bookmarks`), deduplicated by book hash and bookmark UID.
+- Imports uploaded SQLite bookmark files to Supabase (`books`, `book_source_hashes`, and `bookmarks`), deduplicated by canonical book hash sets and bookmark UID.
 - Allows per-book bookmark reading with filter toggle and bookmark type context menu (`default`, `header`, `hidden`).
 
 ## Environment variables
@@ -45,7 +45,7 @@ pnpm --filter web build
 1. User picks a SQLite file in `Upload` tab.
 2. API route stores file in Supabase Storage bucket (`imports`).
 3. Server parses source tables (`Books`, `BookHash`, `Bookmarks`, `Authors`, `BookAuthor`).
-4. If multiple `BookHash` rows share the latest timestamp for one book, the importer selects the lexicographically smallest hash.
-5. Server collapses duplicate parsed rows before upserting user-scoped records into `books` and `bookmarks`.
-6. Server logs detailed import diagnostics to the terminal, and the browser logs failed import responses to the console.
+4. Server groups each source book by all of its `BookHash` rows, resolves existing canonical books by overlapping hash sets, and auto-merges canonical books when one import bridges multiple existing hash groups.
+5. Server upserts hash aliases into `book_source_hashes` and bookmarks into `bookmarks`.
+6. Server logs detailed import diagnostics, planning, merge results, and failures to the terminal, and the browser logs failed import responses to the console.
 7. Deletes uploaded file from storage and writes `import_runs` summary.

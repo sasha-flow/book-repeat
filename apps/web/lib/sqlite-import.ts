@@ -3,15 +3,16 @@ import initSqlJs from "sql.js";
 
 import { normalizeBookmarkType } from "./domain.ts";
 
-interface RawBook {
-  source_hash: string;
+interface RawSourceBook {
+  source_book_id: number;
   title: string;
   authors: string;
+  source_hashes: string;
 }
 
 interface RawBookmark {
   source_uid: string;
-  book_source_hash: string;
+  source_book_id: number;
   bookmark_text: string;
   paragraph: number;
   word: number;
@@ -21,29 +22,40 @@ interface RawBookmark {
   modification_time: number | null;
 }
 
-interface ImportPayload {
-  books: Array<{
-    source_hash: string;
-    title: string;
-    authors: string;
-  }>;
-  bookmarks: Array<{
-    source_uid: string;
-    book_source_hash: string;
-    bookmark_text: string;
-    paragraph: number;
-    word: number;
-    source_style_id: number | null;
-    source_visible: number | null;
-    source_creation_time: number | null;
-    source_modification_time: number | null;
-    bookmark_type: "default" | "header" | "hidden";
-  }>;
+export interface ImportedSourceBook {
+  source_book_id: number;
+  title: string;
+  authors: string;
+  source_hashes: string[];
+}
+
+export interface ImportedBookmark {
+  source_uid: string;
+  source_book_id: number;
+  bookmark_text: string;
+  paragraph: number;
+  word: number;
+  source_style_id: number | null;
+  source_visible: number | null;
+  source_creation_time: number | null;
+  source_modification_time: number | null;
+  bookmark_type: "default" | "header" | "hidden";
+}
+
+export interface ImportPayload {
+  books: ImportedSourceBook[];
+  bookmarks: ImportedBookmark[];
   diagnostics: {
     sourceTables: string[];
     bookHash: {
       totalRows: number;
-      selectedRows: number;
+      distinctBookCount: number;
+      multiHashBookCount: number;
+      multiHashBookSamples: Array<{
+        bookId: number;
+        hashCount: number;
+        hashes: string[];
+      }>;
       tiedLatestBookCount: number;
       tiedLatestBookSamples: Array<{
         bookId: number;
@@ -87,24 +99,6 @@ function getExistingTables(db: {
   return new Set(rows.map((row) => String(row.name)));
 }
 
-function getLatestBookHashCte(): string {
-  return `
-    WITH latest_book_hash AS (
-      SELECT bh.book_id, bh.hash, bh.timestamp
-      FROM BookHash bh
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM BookHash newer
-        WHERE newer.book_id = bh.book_id
-          AND (
-            newer.timestamp > bh.timestamp
-            OR (newer.timestamp = bh.timestamp AND newer.hash < bh.hash)
-          )
-      )
-    )
-  `;
-}
-
 function getScalarNumber(
   db: { exec: (sql: string) => { columns: string[]; values: unknown[][] }[] },
   sql: string,
@@ -113,6 +107,17 @@ function getScalarNumber(
   const value = result?.values?.[0]?.[0];
 
   return typeof value === "number" ? value : Number(value ?? 0);
+}
+
+function parseDelimitedHashes(rawHashes: string | null): string[] {
+  if (!rawHashes) {
+    return [];
+  }
+
+  return rawHashes
+    .split(",")
+    .map((hash) => hash.trim())
+    .filter((hash) => hash.length > 0);
 }
 
 function getBookHashDiagnostics(
@@ -124,14 +129,44 @@ function getBookHashDiagnostics(
   }
 
   const totalRows = getScalarNumber(db, `SELECT COUNT(*) FROM BookHash`);
-  const selectedRows = getScalarNumber(
+  const distinctBookCount = getScalarNumber(
+    db,
+    `SELECT COUNT(DISTINCT book_id) FROM BookHash`,
+  );
+  const multiHashBookCount = getScalarNumber(
     db,
     `
-      ${getLatestBookHashCte()}
       SELECT COUNT(*)
-      FROM latest_book_hash
+      FROM (
+        SELECT book_id
+        FROM BookHash
+        GROUP BY book_id
+        HAVING COUNT(*) > 1
+      ) multi_hash_books
     `,
   );
+  const multiHashBookSamplesQuery = db.exec(`
+    SELECT
+      bh.book_id AS book_id,
+      COUNT(*) AS hash_count,
+      GROUP_CONCAT(hash_value, ',') AS hashes
+    FROM (
+      SELECT book_id, hash AS hash_value
+      FROM BookHash
+      ORDER BY book_id, timestamp DESC, hash ASC
+    ) bh
+    GROUP BY bh.book_id
+    HAVING COUNT(*) > 1
+    ORDER BY hash_count DESC, bh.book_id ASC
+    LIMIT 10
+  `)[0];
+  const multiHashBookSamplesRows = multiHashBookSamplesQuery
+    ? mapRows<{
+        book_id: number;
+        hash_count: number;
+        hashes: string;
+      }>(multiHashBookSamplesQuery.columns, multiHashBookSamplesQuery.values)
+    : [];
   const tiedLatestBookCount = getScalarNumber(
     db,
     `
@@ -162,8 +197,12 @@ function getBookHashDiagnostics(
       bh.book_id AS book_id,
       bh.timestamp AS timestamp,
       COUNT(*) AS candidate_count,
-      GROUP_CONCAT(bh.hash, ',') AS hashes
-    FROM BookHash bh
+      GROUP_CONCAT(hash_value, ',') AS hashes
+    FROM (
+      SELECT book_id, timestamp, hash AS hash_value
+      FROM BookHash
+      ORDER BY book_id, timestamp DESC, hash ASC
+    ) bh
     JOIN latest_timestamp latest
       ON latest.book_id = bh.book_id
      AND latest.latest_timestamp = bh.timestamp
@@ -183,15 +222,19 @@ function getBookHashDiagnostics(
 
   return {
     totalRows,
-    selectedRows,
+    distinctBookCount,
+    multiHashBookCount,
+    multiHashBookSamples: multiHashBookSamplesRows.map((row) => ({
+      bookId: Number(row.book_id),
+      hashCount: Number(row.hash_count),
+      hashes: parseDelimitedHashes(String(row.hashes ?? "")),
+    })),
     tiedLatestBookCount,
     tiedLatestBookSamples: tiedLatestBookSamplesRows.map((row) => ({
       bookId: Number(row.book_id),
       timestamp: Number(row.timestamp),
       candidateCount: Number(row.candidate_count),
-      hashes: String(row.hashes)
-        .split(",")
-        .filter((hash) => hash.length > 0),
+      hashes: parseDelimitedHashes(String(row.hashes ?? "")),
     })),
   };
 }
@@ -217,9 +260,8 @@ export async function parseSqlitePayload(
     hasBooks && hasBookHash
       ? hasAuthors && hasBookAuthor
         ? `
-            ${getLatestBookHashCte()}
             SELECT
-              lbh.hash AS source_hash,
+              b.book_id AS source_book_id,
               b.title AS title,
               COALESCE((
                 SELECT GROUP_CONCAT(author_name, ', ')
@@ -230,19 +272,44 @@ export async function parseSqlitePayload(
                   WHERE ba.book_id = b.book_id
                   ORDER BY ba.author_index
                 ) ordered_authors
-              ), '') AS authors
+              ), '') AS authors,
+              COALESCE((
+                SELECT GROUP_CONCAT(hash_value, ',')
+                FROM (
+                  SELECT bh.hash AS hash_value
+                  FROM BookHash bh
+                  WHERE bh.book_id = b.book_id
+                  ORDER BY bh.timestamp DESC, bh.hash ASC
+                ) ordered_hashes
+              ), '') AS source_hashes
             FROM Books b
-            JOIN latest_book_hash lbh ON lbh.book_id = b.book_id
+            WHERE EXISTS (
+              SELECT 1
+              FROM BookHash bh
+              WHERE bh.book_id = b.book_id
+            )
             ORDER BY b.book_id
           `
         : `
-            ${getLatestBookHashCte()}
             SELECT
-              lbh.hash AS source_hash,
+              b.book_id AS source_book_id,
               b.title AS title,
-              '' AS authors
+              '' AS authors,
+              COALESCE((
+                SELECT GROUP_CONCAT(hash_value, ',')
+                FROM (
+                  SELECT bh.hash AS hash_value
+                  FROM BookHash bh
+                  WHERE bh.book_id = b.book_id
+                  ORDER BY bh.timestamp DESC, bh.hash ASC
+                ) ordered_hashes
+              ), '') AS source_hashes
             FROM Books b
-            JOIN latest_book_hash lbh ON lbh.book_id = b.book_id
+            WHERE EXISTS (
+              SELECT 1
+              FROM BookHash bh
+              WHERE bh.book_id = b.book_id
+            )
             ORDER BY b.book_id
           `
       : null;
@@ -250,10 +317,9 @@ export async function parseSqlitePayload(
   const bookmarksSql =
     hasBookmarks && hasBookHash
       ? `
-          ${getLatestBookHashCte()}
           SELECT
             bm.uid AS source_uid,
-            lbh.hash AS book_source_hash,
+            bm.book_id AS source_book_id,
             bm.bookmark_text AS bookmark_text,
             bm.paragraph AS paragraph,
             bm.word AS word,
@@ -262,7 +328,11 @@ export async function parseSqlitePayload(
             bm.creation_time AS creation_time,
             bm.modification_time AS modification_time
           FROM Bookmarks bm
-          JOIN latest_book_hash lbh ON lbh.book_id = bm.book_id
+          WHERE EXISTS (
+            SELECT 1
+            FROM BookHash bh
+            WHERE bh.book_id = bm.book_id
+          )
           ORDER BY bm.paragraph, bm.word, bm.bookmark_id
         `
       : null;
@@ -274,8 +344,8 @@ export async function parseSqlitePayload(
   const booksQuery = booksResult[0];
   const bookmarksQuery = bookmarksResult[0];
 
-  const booksRows: RawBook[] = booksQuery
-    ? mapRows<RawBook>(booksQuery.columns, booksQuery.values)
+  const booksRows: RawSourceBook[] = booksQuery
+    ? mapRows<RawSourceBook>(booksQuery.columns, booksQuery.values)
     : [];
   const bookmarksRows: RawBookmark[] = bookmarksQuery
     ? mapRows<RawBookmark>(bookmarksQuery.columns, bookmarksQuery.values)
@@ -285,13 +355,14 @@ export async function parseSqlitePayload(
 
   return {
     books: booksRows.map((book) => ({
-      source_hash: String(book.source_hash),
+      source_book_id: Number(book.source_book_id),
       title: String(book.title),
       authors: String(book.authors),
+      source_hashes: parseDelimitedHashes(String(book.source_hashes ?? "")),
     })),
     bookmarks: bookmarksRows.map((bookmark) => ({
       source_uid: String(bookmark.source_uid),
-      book_source_hash: String(bookmark.book_source_hash),
+      source_book_id: Number(bookmark.source_book_id),
       bookmark_text: String(bookmark.bookmark_text),
       paragraph: Number(bookmark.paragraph ?? 0),
       word: Number(bookmark.word ?? 0),

@@ -2,54 +2,16 @@
 
 ## Summary
 
-This feature document captures the core persisted entities and storage rules that support the current application behavior.
+This feature document captures the application-level persistence behavior and storage expectations that support the current product behavior.
 
-## Persistent entities
+Detailed schema, table fields, constraints, RLS policies, and database-side merge mechanics live in `specs/db.md`.
 
-### Books
+## Persistence responsibilities
 
-Stored fields:
-
-- application id
-- owning user id
-- source hash
-- title
-- flattened authors text
-- created and updated timestamps
-
-Uniqueness rule:
-
-- one row per `(user_id, source_hash)`
-
-### Bookmarks
-
-Stored fields:
-
-- application id
-- owning user id
-- source UID
-- referenced book id
-- bookmark text
-- paragraph and word ordering fields
-- application bookmark type
-- copied source metadata fields
-- created and updated timestamps
-
-Uniqueness rule:
-
-- one row per `(user_id, source_uid)`
-
-### Import runs
-
-Stored fields:
-
-- application id
-- owning user id
-- source file name
-- imported books count
-- imported bookmarks count
-- storage delete error
-- creation timestamp
+- canonical books persist user-visible book records for browsing and reading
+- source hash aliases persist cross-device reconciliation state for imported books
+- bookmarks persist user-readable imported content and current bookmark type
+- import runs persist lightweight operational history for completed imports
 
 ## Storage model
 
@@ -57,19 +19,20 @@ Stored fields:
 - objects are written into a folder named after the authenticated user's id
 - users can upload, read, and delete only objects in their own folder according to storage policies
 
-## Integrity and ordering rules
+## Application integrity rules
 
-- bookmarks reference books through `book_id`
-- books are deduplicated by a deterministic `source_hash` selection from source `BookHash` rows
-- deleting a book cascades to its bookmarks
-- deleting a user cascades to imported books, bookmarks, and import runs
+- bookmarks always reference canonical books, not transient source-book identities
+- source `BookHash` rows can accumulate over time for the same canonical book
+- canonical books are merged when one imported hash set overlaps multiple existing canonical books for the same user
+- deleting a canonical book removes its bookmarks and hash aliases
+- deleting a user removes imported books, aliases, bookmarks, and import runs
 - bookmarks are displayed in source order using `(paragraph, word)`
 
 ## Security rules
 
-- row-level security is enabled on `books`, `bookmarks`, and `import_runs`
-- select, insert, update, and delete access is restricted to row owners where applicable
-- storage policies enforce the same user boundary for import files
+- the persisted model is owner-scoped through row-level security and storage policies
+- browser-side reads and normal updates are expected to use RLS-constrained clients
+- server-side import writes are expected to happen only after token validation via the service-role client
 
 ## Out of scope
 
