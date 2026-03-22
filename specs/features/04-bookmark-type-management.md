@@ -6,7 +6,8 @@ This feature covers classification of bookmarks into application-specific types 
 
 ## Current behavior
 
-- a long press or right click on a bookmark opens a modal bottom sheet
+- a right click on a bookmark opens a modal bottom sheet immediately
+- on touch devices, the sheet opens only after a stationary long press on one bookmark; scrolling, dragging, or multi-touch input cancels the pending long press and does not open the sheet
 - the sheet exposes a copy action and three target types: `default`, `header`, and `hidden`
 - the sheet labels `default` as `Text` in the UI
 - the sheet uses an opaque background surface so bookmark text behind it does not bleed through
@@ -29,6 +30,7 @@ This feature covers classification of bookmarks into application-specific types 
 - bookmark type changes are independent from source file re-upload intent, but rely on stable imported bookmark identity
 - the reader uses bookmark type as the single application-level visibility model
 - changing bookmark type updates local reader state immediately so card styling and visibility match the active filter without a reload
+- touch-triggered opening uses a mobile-style hold delay with a small movement tolerance so normal finger jitter can still open the sheet while scrolling gestures are rejected
 - `header` bookmarks are rendered with emphasized heading styling
 - `hidden` bookmarks remain visible only in the `All` filter and use muted styling there
 

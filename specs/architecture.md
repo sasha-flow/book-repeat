@@ -40,7 +40,7 @@ Most user-facing state lives in the client-side application shell implemented in
 
 The primary shell screens (`Books`, `Upload`, and `Profile`) share a pinned mobile chrome layout: the optional top header, the books search bar when present, and the bottom navigation remain fixed on-screen while the main content scrolls underneath reserved layout spacers. Nested routes such as the book reader bypass this shell and render their own page-specific layout with a back action instead of the shell navigation.
 
-The reader's bookmark action sheet is implemented as a client-side fixed overlay with a dimmed backdrop and an opaque bottom-sheet surface. On wider viewports, the overlay still uses a full-width fixed rail for modal behavior, but the visible sheet content is constrained to the same centered mobile-width column as the reader so contextual actions stay visually attached to the reading surface.
+The reader's bookmark action sheet is implemented as a client-side fixed overlay with a dimmed backdrop and an opaque bottom-sheet surface. On touch devices, the sheet opens only after a stationary long press on a single bookmark, and pending activation is cancelled by meaningful touch movement, scrolling, drag input, or multi-touch. On wider viewports, the overlay still uses a full-width fixed rail for modal behavior, but the visible sheet content is constrained to the same centered mobile-width column as the reader so contextual actions stay visually attached to the reading surface.
 
 The browser also stores the selected appearance mode in local storage. Theme resolution stays entirely client-side and updates the root document class so the shared UI package CSS variables can switch between light and dark tokens.
 

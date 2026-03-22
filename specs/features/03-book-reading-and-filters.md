@@ -28,6 +28,7 @@ This feature covers the book detail screen used for reading imported bookmark te
 - filter changes affect only presentation, not stored data
 - the default active reader filter is `Visible`
 - the screen prioritizes legibility and continuous scrolling over dense controls
+- touch scrolling through bookmark rows must not trigger the bookmark action sheet unless the user keeps one finger stationary long enough to complete a long press
 
 ## Data dependencies
 
