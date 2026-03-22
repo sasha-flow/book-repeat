@@ -4,14 +4,14 @@ Book Repeat is a mobile-first web application for importing SQLite bookmark data
 
 The current implementation supports:
 
-- email/password authentication with Supabase Auth
-- a mobile-first application shell with bottom navigation for `Books`, `Upload`, and `User`
+- email/password authentication with Supabase Auth, including account creation from the signed-out screen
+- a mobile-first application shell with bottom navigation for `Books`, `Upload`, and `Profile`
 - SQLite file upload, parsing, user-scoped deduplication, and import run logging
 - a searchable books list
 - a per-book reading screen with bookmark visibility filters
 - bookmark type changes between `default`, `header`, and `hidden`
 
-Deeper project documentation lives under [specs/product.md](specs/product.md), [specs/architecture.md](specs/architecture.md), [specs/infra.md](specs/infra.md), and [specs/features.md](specs/features.md).
+Deeper project documentation lives under [specs/product.md](specs/product.md), [specs/architecture.md](specs/architecture.md), [specs/db.md](specs/db.md), [specs/infra.md](specs/infra.md), [specs/design.md](specs/design.md), and [specs/features.md](specs/features.md).
 
 ## Workspace layout
 
@@ -24,13 +24,13 @@ Deeper project documentation lives under [specs/product.md](specs/product.md), [
 
 ## Product flow
 
-1. The user signs in.
+1. The user signs in or creates an account.
 2. The authenticated app opens in a mobile-first shell.
 3. In `Upload`, the user selects a SQLite database file exported from the source reader app.
 4. The backend uploads the file to Supabase Storage, parses source books plus all of their `BookHash` values, resolves or merges one canonical user-scoped book per overlapping hash set, upserts bookmarks, writes an import summary, and deletes the uploaded file.
 5. In `Books`, the user browses imported books and opens a book detail screen.
 6. In the book detail screen, the user reads bookmarks, cycles the visibility filter, and changes bookmark types from the context menu.
-7. In `User`, the user sees the current account email and can sign out.
+7. In `Profile`, the user sees the current account email, can change appearance settings, and can sign out.
 
 ## Prerequisites
 

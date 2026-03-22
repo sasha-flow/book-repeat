@@ -55,29 +55,6 @@ Implementation notes:
 - the Supabase dry-run step is skipped when those credentials are not available, which keeps pull requests from forks from failing only because repository secrets are unavailable
 - this workflow is intentionally separate from `.github/workflows/production-supabase-migrate.yml`
 
-## Pull request validation
-
-The repository includes a dedicated pull request validation workflow at `.github/workflows/pull-request-validation.yml`.
-
-The workflow runs on every `pull_request` event and performs the standard workspace verification flow:
-
-- `pnpm install --frozen-lockfile`
-- `pnpm lint`
-- `pnpm check-types`
-- `pnpm build`
-- `supabase db push --dry-run` when Supabase CI credentials are available
-- `pnpm -r --if-present test`
-
-Implementation notes:
-
-- dependency installation is performed once at the workspace root with `pnpm`
-- linting, type checking, and build run through the root scripts, which delegate to Turborepo
-- test execution is future-proofed by using `pnpm -r --if-present test`, so packages are tested automatically as soon as package-level `test` scripts are added
-- the workflow provides placeholder Supabase environment variables so build validation can run in CI without production credentials
-- the workflow also performs a Supabase migration dry-run against the configured remote project when `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_PROJECT_ID` are available in GitHub Actions
-- the Supabase dry-run step is skipped when those credentials are not available, which keeps pull requests from forks from failing only because repository secrets are unavailable
-- this workflow is intentionally separate from `.github/workflows/production-supabase-migrate.yml`
-
 ## Application runtime
 
 The product runtime is centered on the `apps/web` Next.js application.
@@ -88,6 +65,7 @@ Current runtime characteristics:
 - TypeScript codebase
 - Tailwind-based styling
 - browser and server integration with Supabase
+- Vercel-targeted production hosting for `apps/web`
 
 The deployed application requires Supabase-backed authentication and database access. The import flow also requires privileged server access through the Supabase service role key.
 
@@ -177,11 +155,10 @@ The production application deployment is handled separately by Vercel, which aut
 - application deployment to production is handled by Vercel Git integration on pushes to `main`
 - production Vercel environment variables are populated automatically by the Supabase-to-Vercel integration
 - failing pull request workflow runs do not block merging by themselves; the repository branch protection rules must require the workflow status check for it to be merge-blocking
-
 - the production migration workflow requires these GitHub Actions values:
-  - `SUPABASE_ACCESS_TOKEN`: GITHUB SECRET, personal access token used by Supabase CLI in non-interactive CI runs
-  - `SUPABASE_PROJECT_ID`: GITHUB VARIABLE, production Supabase project reference
-  - `SUPABASE_DB_PASSWORD`: GITHUB SECRET, production database password required for remote migration operations
+  - `SUPABASE_ACCESS_TOKEN`: GitHub secret, personal access token used by Supabase CLI in non-interactive CI runs
+  - `SUPABASE_PROJECT_ID`: GitHub variable, production Supabase project reference
+  - `SUPABASE_DB_PASSWORD`: GitHub secret, production database password required for remote migration operations
 - the migration workflow is intentionally scoped to database schema rollout and does not perform application deployment to Vercel
 
 ## Current limitations

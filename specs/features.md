@@ -2,6 +2,14 @@
 
 This index tracks the currently documented, implemented features of Book Repeat.
 
+Related cross-cutting documentation:
+
+- `specs/product.md` for product scope and current user journeys
+- `specs/architecture.md` for system boundaries and architectural decisions
+- `specs/db.md` for schema, constraints, row-level security, and database-side rules
+- `specs/infra.md` for local development, CI, deployment, and operational flow
+- `specs/design.md` for shared UI, UX, layout, and presentation conventions
+
 ## Implemented features
 
 1. [01-auth-and-app-shell.md](features/01-auth-and-app-shell.md)
@@ -17,4 +25,5 @@ This index tracks the currently documented, implemented features of Book Repeat.
 - each feature document should stay aligned with implemented code paths
 - architectural cross-cutting concerns belong in `specs/architecture.md`
 - database schema, constraints, relations, and database-side business rules belong in `specs/db.md`
+- design and UX conventions that apply across multiple screens belong in `specs/design.md`
 - high-level product intent belongs in `specs/product.md`

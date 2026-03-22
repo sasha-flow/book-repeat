@@ -1,3 +1,9 @@
+# Historical planning note
+
+This file is preserved as the original planning brief.
+
+It is not the current source of truth for implemented behavior. Use `specs/product.md`, `specs/architecture.md`, `specs/db.md`, `specs/infra.md`, `specs/design.md`, and `specs/features.md` for current documentation.
+
 Book-repeat is a web application that will help the user to:
 
 - upload a file (SQLite db) containing list of books and bookmarks that user saved.

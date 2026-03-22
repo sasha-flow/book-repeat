@@ -50,6 +50,13 @@ import {
   applyBookmarkFilter,
   nextBookmarkFilter,
 } from "../lib/bookmark-filters";
+import {
+  BOOKMARK_LONG_PRESS_DELAY_MS,
+  createBookmarkLongPressGesture,
+  type BookmarkLongPressGesture,
+  shouldCancelBookmarkLongPress,
+} from "../lib/bookmark-long-press";
+import { getBookmarkContextMenuLayout } from "../lib/bookmark-context-menu-styles";
 import { getOpaqueHeaderSurfaceStyle } from "../lib/book-detail-styles";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
 import { ThemeToggle } from "./theme-toggle";
@@ -60,6 +67,14 @@ interface MenuState {
   bookmarkId: string;
   bookmarkText: string;
   currentType: BookmarkType;
+}
+
+function getTouchPoints(touches: TouchEvent<HTMLLIElement>["touches"]) {
+  return Array.from(touches, ({ identifier, clientX, clientY }) => ({
+    identifier,
+    clientX,
+    clientY,
+  }));
 }
 
 function getTabFromSearchParam(value: string | null): Tab {
@@ -513,6 +528,8 @@ function BookmarkContextMenu({
     return null;
   }
 
+  const menuLayout = getBookmarkContextMenuLayout();
+
   const actions: Array<{
     type: BookmarkType;
     label: string;
@@ -527,23 +544,18 @@ function BookmarkContextMenu({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-40 bg-black/50"
+        className={menuLayout.backdropClassName}
         onClick={onClose}
         aria-label="Close context menu"
       />
-      <div className="fixed inset-x-0 bottom-0 z-50">
-        <div className="mx-auto w-full" style={{ maxWidth: 393.256 }}>
+      <div className={menuLayout.railClassName} style={menuLayout.overlayStyle}>
+        <div
+          className={menuLayout.frameClassName}
+          style={menuLayout.frameStyle}
+        >
           <div
-            className="bg-background"
-            style={{
-              minHeight: 281.978,
-              borderTopWidth: 1.108,
-              borderTopStyle: "solid",
-              borderTopColor: "var(--border)",
-              borderTopLeftRadius: 10,
-              borderTopRightRadius: 10,
-              boxShadow: "0 -10px 30px rgba(3, 2, 19, 0.08)",
-            }}
+            className={menuLayout.surfaceClassName}
+            style={menuLayout.surfaceStyle}
             role="dialog"
             aria-modal="true"
             aria-label="Bookmark actions"
@@ -881,6 +893,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loadingBook, setLoadingBook] = useState(false);
   const longPressTimer = useRef<number | null>(null);
+  const longPressGesture = useRef<BookmarkLongPressGesture | null>(null);
   const menuHistoryActive = useRef(false);
 
   const visibleBookmarks = applyBookmarkFilter(bookmarks, bookmarkFilter);
@@ -937,6 +950,15 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
     });
   };
 
+  const clearLongPress = useCallback(() => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+
+    longPressGesture.current = null;
+  }, []);
+
   const closeMenu = useCallback(() => {
     if (menuHistoryActive.current) {
       window.history.back();
@@ -983,27 +1005,41 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
     };
   }, [closeMenu, menuState]);
 
+  useEffect(() => clearLongPress, [clearLongPress]);
+
   const handleLongPressStart = (
     event: TouchEvent<HTMLLIElement>,
     bookmark: BookmarkRecord,
   ) => {
-    const touch = event.touches[0];
+    const gesture = createBookmarkLongPressGesture(
+      getTouchPoints(event.touches),
+    );
 
-    if (!touch) {
+    clearLongPress();
+
+    if (!gesture) {
       return;
     }
 
+    longPressGesture.current = gesture;
     longPressTimer.current = window.setTimeout(() => {
+      clearLongPress();
       openMenu(bookmark);
-    }, 500);
+    }, BOOKMARK_LONG_PRESS_DELAY_MS);
   };
 
-  const handleLongPressEnd = () => {
-    if (longPressTimer.current) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+  const handleLongPressMove = (event: TouchEvent<HTMLLIElement>) => {
+    if (
+      shouldCancelBookmarkLongPress(
+        longPressGesture.current,
+        getTouchPoints(event.touches),
+      )
+    ) {
+      clearLongPress();
     }
   };
+
+  const handleLongPressEnd = clearLongPress;
 
   const updateBookmarkType = async (
     bookmarkId: string,
@@ -1225,6 +1261,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                       onTouchStart={(event) =>
                         handleLongPressStart(event, bookmark)
                       }
+                      onTouchMove={handleLongPressMove}
                       onTouchEnd={handleLongPressEnd}
                       onTouchCancel={handleLongPressEnd}
                       className="bg-card"
