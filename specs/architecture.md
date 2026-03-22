@@ -28,6 +28,7 @@ The browser client is responsible for:
 
 - session-aware rendering
 - tab navigation inside the mobile-first shell
+- keeping the primary shell chrome pinned on the three top-level tabs
 - applying the selected light, dark, or system theme to the document root
 - fetching books and bookmarks from Supabase
 - applying client-side bookmark visibility filters
@@ -36,6 +37,8 @@ The browser client is responsible for:
 - uploading SQLite files to the server import route
 
 Most user-facing state lives in the client-side application shell implemented in `apps/web/app/app-client.tsx`.
+
+The primary shell screens (`Books`, `Upload`, and `User`) share a pinned mobile chrome layout: the optional top header, the books search bar when present, and the bottom navigation remain fixed on-screen while the main content scrolls underneath reserved layout spacers. Nested routes such as the book reader bypass this shell and render their own page-specific layout with a back action instead of the shell navigation.
 
 The browser also stores the selected appearance mode in local storage. Theme resolution stays entirely client-side and updates the root document class so the shared UI package CSS variables can switch between light and dark tokens.
 

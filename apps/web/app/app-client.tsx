@@ -43,6 +43,10 @@ import {
   bookmarkFilterLabels,
 } from "../lib/domain";
 import {
+  getAppShellLayoutMetrics,
+  type AppShellChromeMode,
+} from "../lib/app-shell-layout";
+import {
   applyBookmarkFilter,
   nextBookmarkFilter,
 } from "../lib/bookmark-filters";
@@ -227,7 +231,7 @@ function AppShell({
   overlay,
   header,
   bottomBar,
-  pinChrome,
+  chromeMode = "flow",
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
@@ -235,26 +239,22 @@ function AppShell({
   overlay?: ReactNode;
   header?: ReactNode;
   bottomBar?: ReactNode;
-  pinChrome?: boolean;
+  chromeMode?: AppShellChromeMode;
 }) {
-  const headerClassName = pinChrome
-    ? "fixed top-0 left-0 right-0 z-20"
-    : "sticky top-0 z-20";
-  const navClassName = pinChrome
-    ? "fixed bottom-0 left-0 right-0 z-20"
-    : "sticky bottom-0 z-20 mt-auto";
-  const bottomBarClassName = pinChrome
-    ? "fixed bottom-[65.098px] left-0 right-0 z-20"
-    : "sticky bottom-[65.098px] z-20 mt-auto";
-  const mainClassName = pinChrome ? "flex-1 px-4 py-3" : "flex-1";
-  const mainStyle = pinChrome
-    ? undefined
-    : {
-        paddingLeft: 15.993,
-        paddingRight: 15.993,
-        paddingTop: 23.99,
-        paddingBottom: bottomBar ? 134.177 : 65.098,
-      };
+  const {
+    headerClassName,
+    navClassName,
+    bottomBarClassName,
+    mainClassName,
+    mainStyle,
+    chromeSurfaceStyle,
+    needsHeaderSpacer,
+    needsBottomBarSpacer,
+    needsNavSpacer,
+  } = getAppShellLayoutMetrics({
+    chromeMode,
+    hasBottomBar: Boolean(bottomBar),
+  });
 
   return (
     <div
@@ -263,7 +263,7 @@ function AppShell({
     >
       {header ? (
         <>
-          {pinChrome ? (
+          {needsHeaderSpacer ? (
             <div
               aria-hidden="true"
               className="mx-auto w-full max-w-md border-b px-4 py-3 invisible pointer-events-none"
@@ -284,22 +284,34 @@ function AppShell({
       </main>
 
       {bottomBar ? (
-        <div className={bottomBarClassName}>
-          <div
-            className="mx-auto h-[69.079px] w-full border-t-[1.108px] border-border bg-background"
-            style={{
-              maxWidth: 393.256,
-              paddingLeft: 15.993,
-              paddingRight: 15.993,
-              paddingTop: 17.101,
-            }}
-          >
-            {bottomBar}
+        <>
+          <div className={bottomBarClassName}>
+            <div
+              className="mx-auto h-[69.079px] w-full border-t-[1.108px] border-border bg-background"
+              style={{
+                ...chromeSurfaceStyle,
+                maxWidth: 393.256,
+                paddingLeft: 15.993,
+                paddingRight: 15.993,
+                paddingTop: 17.101,
+              }}
+            >
+              {bottomBar}
+            </div>
           </div>
-        </div>
+          {needsBottomBarSpacer ? (
+            <div
+              aria-hidden="true"
+              className="mx-auto w-full invisible pointer-events-none"
+              style={{ maxWidth: 393.256 }}
+            >
+              <div className="h-[69.079px] w-full border-t-[1.108px] border-border bg-background" />
+            </div>
+          ) : null}
+        </>
       ) : null}
 
-      {pinChrome ? (
+      {needsNavSpacer ? (
         <div
           aria-hidden="true"
           className="mx-auto w-full invisible pointer-events-none"
@@ -325,7 +337,10 @@ function AppShell({
       <nav className={navClassName}>
         <div
           className="mx-auto flex h-[65.098px] w-full items-stretch border-t-[1.108px] border-border bg-background"
-          style={{ maxWidth: 393.256 }}
+          style={{
+            ...chromeSurfaceStyle,
+            maxWidth: 393.256,
+          }}
         >
           <ShellNavButton
             active={activeTab === "books"}
@@ -794,7 +809,7 @@ export function AppClient() {
           onChange={(event) => setBookQuery(event.target.value)}
           placeholder="Search books..."
           aria-label="Search books"
-          className="h-[35.985px] rounded-[8px] border-[1.108px] border-input bg-muted/70 px-0 py-0 text-[16px] font-normal text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0"
+          className="h-[35.985px] rounded-[8px] border-[1.108px] border-input bg-background px-0 py-0 text-[16px] font-normal text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0"
           style={{
             paddingLeft: 40,
             paddingRight: 12,
@@ -844,6 +859,7 @@ export function AppClient() {
       onTabChange={(tab) => {
         router.replace(getTabHref(tab));
       }}
+      chromeMode="pinned"
       header={header}
       bottomBar={bottomBar}
     >

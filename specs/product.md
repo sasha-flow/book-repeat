@@ -48,6 +48,8 @@ Product expectations for this shell:
 
 - work comfortably on mobile-width layouts
 - keep navigation persistent and simple
+- keep the bottom navigation visible on the app's three primary shell screens
+- use dedicated nested-screen layouts with a back action instead of shell navigation on secondary routes
 - expose the app's three main tasks without secondary navigation depth
 
 ## Books experience
@@ -58,6 +60,7 @@ Current behavior:
 
 - fetch books that belong to the authenticated user
 - allow free-text search over title and authors
+- keep the search field visible while browsing the books list
 - show each book as a compact card/list item
 - navigate to a dedicated book detail route when a book is selected
 
