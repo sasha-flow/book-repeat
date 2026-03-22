@@ -9,18 +9,28 @@ This feature covers the end-to-end import of a source SQLite bookmark database i
 - the user selects a SQLite file from the `Upload` tab
 - the client sends the file to the import API route together with the current auth token
 - the server uploads the file to the `imports` bucket
-- the server parses source books, authors, and bookmarks from SQLite
-- books are upserted by `(user_id, source_uid)`
-- bookmarks are upserted by `(user_id, source_uid)` after mapping them to stored books
+- the server parses source books, all `BookHash` rows for each source book, authors, and bookmarks from SQLite
+- the server stores the uploaded object under a request-scoped storage key instead of the original filename
+- the server resolves canonical books by overlapping source hash sets stored in `book_source_hashes`
+- canonical-book alias lookup is split into bounded batches so large imports do not exceed PostgREST URL limits
+- if one imported hash set overlaps multiple existing canonical books, the importer auto-merges them into one winner before writing aliases and bookmarks
+- duplicate bookmark rows inside the parsed payload are removed before database upserts
+- canonical books are created or updated in `books`, while source hashes are upserted by `(user_id, source_hash)` in `book_source_hashes`
+- bookmarks are upserted by `(user_id, source_uid)` after mapping source `book_id` values to canonical book ids
 - the uploaded storage object is deleted after processing
 - the server writes an `import_runs` summary row
+- the route logs request-scoped import stages, parsing diagnostics, alias-lookup batching, canonical-book planning, merge results, cleanup attempts, and normalized exception details to the server console as serialized JSON
+- the browser logs failed import responses and request exceptions to the browser console, while the UI shows only generic failure text with a request reference id
 
 ## Source mapping rules
 
-- `BookUid.uid` is the stable unique identifier for books
+- each source `Books.book_id` is imported with all of its `BookHash.hash` values
+- canonical books are matched by any overlapping `BookHash.hash` stored in `book_source_hashes`
+- if several source books or existing canonical books are connected by overlapping hashes, they collapse into one canonical book for that user
 - `Bookmarks.uid` is the stable unique identifier for bookmarks
+- `Bookmarks.book_id` links each bookmark to the imported source book, which is then resolved to one canonical application book through the import plan
 - `Books.title` maps to stored book title
-- author names are flattened into one stored text field
+- author names are flattened into one stored text field in `author_index` order
 - bookmark order is captured with `paragraph` and `word`
 - source `visible` and `style_id` values are normalized into the application bookmark type
 
@@ -28,14 +38,16 @@ This feature covers the end-to-end import of a source SQLite bookmark database i
 
 - imports are user-scoped
 - re-importing overlapping files should not duplicate stored rows for the same user
+- importing a file that bridges multiple existing canonical books should merge them automatically for that user
 - imported files are temporary processing artifacts and should not remain in storage after a successful cleanup
 - import success reporting includes counts and storage cleanup status
+- import diagnostics include duplicate summaries, `BookHash` distribution diagnostics, bounded alias-lookup chunk sizes, canonical merge planning, merge execution results, and normalized exception details in server logs
 
 ## Data dependencies
 
 - storage bucket `imports`
-- `books`, `bookmarks`, and `import_runs` tables
-- source SQLite tables: `Books`, `Bookmarks`, `Authors`, `BookAuthor`, and `BookUid`
+- application persistence described in `specs/db.md`, especially `books`, `book_source_hashes`, `bookmarks`, and `import_runs`
+- source SQLite tables: `Books`, `BookHash`, `Bookmarks`, `Authors`, and `BookAuthor`
 
 ## Out of scope
 

@@ -30,7 +30,30 @@ Primary workspace commands:
 - `pnpm dev` starts the workspace development flow
 - `pnpm lint`, `pnpm check-types`, and `pnpm build` run workspace-level verification tasks
 
-For web-only work, the repository also supports filtered commands such as `pnpm --filter web dev`.
+For web-only work, the repository also supports filtered commands such as `pnpm --filter web dev`, `pnpm --filter web test`, `pnpm --filter web lint`, `pnpm --filter web check-types`, and `pnpm --filter web build`.
+
+## Pull request validation
+
+The repository includes a dedicated pull request validation workflow at `.github/workflows/pull-request-validation.yml`.
+
+The workflow runs on every `pull_request` event and performs the standard workspace verification flow:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm lint`
+- `pnpm check-types`
+- `pnpm build`
+- `supabase db push --dry-run` when Supabase CI credentials are available
+- `pnpm -r --if-present test`
+
+Implementation notes:
+
+- dependency installation is performed once at the workspace root with `pnpm`
+- linting, type checking, and build run through the root scripts, which delegate to Turborepo
+- test execution is future-proofed by using `pnpm -r --if-present test`, so packages are tested automatically as soon as package-level `test` scripts are added
+- the workflow provides placeholder Supabase environment variables so build validation can run in CI without production credentials
+- the workflow also performs a Supabase migration dry-run against the configured remote project when `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_PROJECT_ID` are available in GitHub Actions
+- the Supabase dry-run step is skipped when those credentials are not available, which keeps pull requests from forks from failing only because repository secrets are unavailable
+- this workflow is intentionally separate from `.github/workflows/production-supabase-migrate.yml`
 
 ## Pull request validation
 

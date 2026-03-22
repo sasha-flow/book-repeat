@@ -16,4 +16,5 @@ This index tracks the currently documented, implemented features of Book Repeat.
 - each feature document describes current behavior only
 - each feature document should stay aligned with implemented code paths
 - architectural cross-cutting concerns belong in `specs/architecture.md`
+- database schema, constraints, relations, and database-side business rules belong in `specs/db.md`
 - high-level product intent belongs in `specs/product.md`

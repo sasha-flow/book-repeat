@@ -24,6 +24,7 @@ This document describes the current implemented behavior only.
 6. The user opens the `Books` tab to browse imported books.
 7. The user opens a book, filters visible bookmarks, and optionally changes bookmark types.
 8. The user opens the `User` tab to inspect the current account and sign out.
+9. The user can switch the application appearance between `Light`, `Dark`, and `System` from the `User` tab.
 
 ## Signed-out experience
 
@@ -47,6 +48,8 @@ Product expectations for this shell:
 
 - work comfortably on mobile-width layouts
 - keep navigation persistent and simple
+- keep the bottom navigation visible on the app's three primary shell screens
+- use dedicated nested-screen layouts with a back action instead of shell navigation on secondary routes
 - expose the app's three main tasks without secondary navigation depth
 
 ## Books experience
@@ -57,6 +60,7 @@ Current behavior:
 
 - fetch books that belong to the authenticated user
 - allow free-text search over title and authors
+- keep the search field visible while browsing the books list
 - show each book as a compact card/list item
 - navigate to a dedicated book detail route when a book is selected
 
@@ -118,7 +122,7 @@ Current behavior:
 - accept a SQLite database file from the user
 - send the file to a server route with the current auth token
 - parse source books, authors, and bookmarks on the server
-- deduplicate books and bookmarks per user by source UID
+- deduplicate books per user by overlapping source hash sets and bookmarks per user by source UID
 - write an import summary row
 - delete the uploaded file from storage after processing
 
@@ -131,7 +135,10 @@ The `User` area is deliberately small.
 Current behavior:
 
 - show the current user email
+- allow the user to choose `Light`, `Dark`, or `System` appearance for the current browser
 - allow sign out
+
+The appearance preference is stored in browser local storage and defaults to the system theme when no explicit choice exists.
 
 Signing out returns the user to the authentication screen and hides application data.
 
@@ -141,6 +148,7 @@ Signing out returns the user to the authentication screen and hides application 
 - imported source identifiers are used to prevent duplicates inside that user's dataset
 - bookmark reading order follows source `paragraph` and `word`
 - bookmark visibility in the reader is controlled by application bookmark types, not directly by source UI state
+- theme preference is a browser-local setting and does not sync through the backend
 
 ## Out of scope in the current implementation
 
@@ -148,5 +156,6 @@ Signing out returns the user to the authentication screen and hides application 
 - bookmark editing beyond bookmark type changes
 - import history UI beyond backend logging
 - advanced account management
+- server-synced preference management
 - server-side background job orchestration for imports
 - roadmap documentation for not-yet-built features
