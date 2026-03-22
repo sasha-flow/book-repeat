@@ -21,6 +21,7 @@ It is the cross-cutting design reference for implemented behavior only. It shoul
 - top-level shell screens use persistent chrome so the user can move between the app's primary tasks without losing orientation
 - nested routes use dedicated page layouts with a back action instead of reusing bottom navigation
 - layout decisions should favor reading comfort, clear touch targets, and predictable vertical flow over high information density
+- layouts with editable text inputs should react to the real visible viewport on mobile instead of assuming the pre-keyboard page height remains usable
 
 ## Surface conventions
 
@@ -62,6 +63,7 @@ It is the cross-cutting design reference for implemented behavior only. It shoul
 - interaction design should favor a small number of obvious actions over dense persistent toolbars
 - contextual actions should appear in dedicated surfaces instead of expanding the baseline layout with always-visible controls
 - dismissal behavior for temporary UI should stay predictable across touch, pointer, keyboard, and browser navigation where supported
+- when the software keyboard opens on mobile, active text entry and nearby content take priority over persistent bottom chrome until the keyboard closes
 
 ## Component system
 

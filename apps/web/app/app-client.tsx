@@ -46,6 +46,7 @@ import {
   getAppShellLayoutMetrics,
   type AppShellChromeMode,
 } from "../lib/app-shell-layout";
+import { useKeyboardViewport } from "../lib/keyboard-viewport";
 import {
   applyBookmarkFilter,
   nextBookmarkFilter,
@@ -98,12 +99,17 @@ function AuthScreen({
 }: {
   onSignedIn: (session: Session) => void;
 }) {
+  const keyboardViewport = useKeyboardViewport();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const authViewportHeight =
+    keyboardViewport.viewportHeight > 0
+      ? keyboardViewport.viewportHeight
+      : undefined;
 
   const submit = async () => {
     setLoading(true);
@@ -133,7 +139,12 @@ function AuthScreen({
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
+    <main
+      className={`mx-auto flex w-full max-w-md px-4 ${
+        keyboardViewport.keyboardOpen ? "items-start py-4" : "items-center"
+      }`}
+      style={{ minHeight: authViewportHeight }}
+    >
       <Card className="w-full">
         <CardHeader>
           <CardTitle>{isSignUp ? "Create account" : "Sign in"}</CardTitle>
@@ -247,6 +258,8 @@ function AppShell({
   header,
   bottomBar,
   chromeMode = "flow",
+  keyboardOpen = false,
+  viewportHeight,
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
@@ -255,26 +268,38 @@ function AppShell({
   header?: ReactNode;
   bottomBar?: ReactNode;
   chromeMode?: AppShellChromeMode;
+  keyboardOpen?: boolean;
+  viewportHeight?: number;
 }) {
   const {
     headerClassName,
     navClassName,
     bottomBarClassName,
+    bottomBarPlacement,
     mainClassName,
     mainStyle,
     chromeSurfaceStyle,
     needsHeaderSpacer,
+    needsTopBottomBarSpacer,
     needsBottomBarSpacer,
     needsNavSpacer,
   } = getAppShellLayoutMetrics({
     chromeMode,
     hasBottomBar: Boolean(bottomBar),
+    keyboardOpen,
   });
+
+  const shellViewportHeight =
+    viewportHeight && viewportHeight > 0 ? viewportHeight : undefined;
+  const bottomBarSurfaceClassName =
+    bottomBarPlacement === "top"
+      ? "mx-auto h-[69.079px] w-full border-b-[1.108px] border-border bg-background"
+      : "mx-auto h-[69.079px] w-full border-t-[1.108px] border-border bg-background";
 
   return (
     <div
-      className="mx-auto flex min-h-screen w-full flex-col bg-background text-foreground"
-      style={{ maxWidth: 393.256 }}
+      className="mx-auto flex w-full flex-col bg-background text-foreground"
+      style={{ maxWidth: 393.256, minHeight: shellViewportHeight }}
     >
       {header ? (
         <>
@@ -294,6 +319,16 @@ function AppShell({
         </>
       ) : null}
 
+      {needsTopBottomBarSpacer ? (
+        <div
+          aria-hidden="true"
+          className="mx-auto w-full invisible pointer-events-none"
+          style={{ maxWidth: 393.256 }}
+        >
+          <div className={bottomBarSurfaceClassName} />
+        </div>
+      ) : null}
+
       <main className={mainClassName} style={mainStyle}>
         {children}
       </main>
@@ -302,7 +337,7 @@ function AppShell({
         <>
           <div className={bottomBarClassName}>
             <div
-              className="mx-auto h-[69.079px] w-full border-t-[1.108px] border-border bg-background"
+              className={bottomBarSurfaceClassName}
               style={{
                 ...chromeSurfaceStyle,
                 maxWidth: 393.256,
@@ -640,6 +675,7 @@ function BookmarkContextMenu({
 }
 
 export function AppClient() {
+  const keyboardViewport = useKeyboardViewport();
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = getTabFromSearchParam(searchParams.get("tab"));
@@ -872,6 +908,8 @@ export function AppClient() {
         router.replace(getTabHref(tab));
       }}
       chromeMode="pinned"
+      keyboardOpen={keyboardViewport.keyboardOpen}
+      viewportHeight={keyboardViewport.viewportHeight}
       header={header}
       bottomBar={bottomBar}
     >

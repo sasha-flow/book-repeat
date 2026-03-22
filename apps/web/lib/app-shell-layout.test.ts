@@ -12,6 +12,7 @@ test("pinned shell chrome reserves space for both search bar and bottom nav", ()
       headerClassName: "fixed top-0 left-0 right-0 z-20",
       navClassName: "fixed bottom-0 left-0 right-0 z-20",
       bottomBarClassName: "fixed bottom-[65.098px] left-0 right-0 z-20",
+      bottomBarPlacement: "bottom",
       mainClassName: "flex-1 px-4 py-3",
       mainStyle: undefined,
       chromeSurfaceStyle: {
@@ -19,6 +20,7 @@ test("pinned shell chrome reserves space for both search bar and bottom nav", ()
         isolation: "isolate",
       },
       needsHeaderSpacer: true,
+      needsTopBottomBarSpacer: false,
       needsBottomBarSpacer: true,
       needsNavSpacer: true,
     },
@@ -32,6 +34,7 @@ test("flow shell chrome keeps content spacing inside main area", () => {
       headerClassName: "sticky top-0 z-20",
       navClassName: "sticky bottom-0 z-20 mt-auto",
       bottomBarClassName: "sticky bottom-[65.098px] z-20 mt-auto",
+      bottomBarPlacement: "bottom",
       mainClassName: "flex-1",
       mainStyle: {
         paddingLeft: 15.993,
@@ -41,6 +44,33 @@ test("flow shell chrome keeps content spacing inside main area", () => {
       },
       chromeSurfaceStyle: undefined,
       needsHeaderSpacer: false,
+      needsTopBottomBarSpacer: false,
+      needsBottomBarSpacer: false,
+      needsNavSpacer: false,
+    },
+  );
+});
+
+test("pinned shell yields bottom nav space and moves search chrome to the top while keyboard is open", () => {
+  assert.deepEqual(
+    getAppShellLayoutMetrics({
+      chromeMode: "pinned",
+      hasBottomBar: true,
+      keyboardOpen: true,
+    }),
+    {
+      headerClassName: "fixed top-0 left-0 right-0 z-20",
+      navClassName: "hidden",
+      bottomBarClassName: "fixed top-0 left-0 right-0 z-20",
+      bottomBarPlacement: "top",
+      mainClassName: "flex-1 px-4 py-3",
+      mainStyle: undefined,
+      chromeSurfaceStyle: {
+        backgroundColor: "var(--background)",
+        isolation: "isolate",
+      },
+      needsHeaderSpacer: true,
+      needsTopBottomBarSpacer: true,
       needsBottomBarSpacer: false,
       needsNavSpacer: false,
     },
