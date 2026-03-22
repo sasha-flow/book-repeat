@@ -12,6 +12,7 @@ This feature covers user authentication and the top-level mobile-first shell tha
 - successful authentication opens the main app shell
 - the signed-in shell exposes three bottom navigation tabs: `Books`, `Upload`, and `Profile`
 - the bottom navigation stays visible on those three primary shell screens while the main content scrolls
+- when the mobile software keyboard opens, the shell switches to the real visible viewport height and may temporarily yield bottom navigation space so focused text fields remain usable
 - the current tab is preserved in the URL through the `tab` query parameter for non-default tabs
 - the `Profile` tab includes a browser-local appearance selector with `Light`, `Dark`, and `System` options
 
@@ -29,6 +30,7 @@ This feature covers user authentication and the top-level mobile-first shell tha
 - the default signed-in tab is `Books`
 - the shell is optimized for narrow screens and constrained to a single-column layout
 - primary shell screens keep navigation visible, while nested routes use their own layout instead of reusing the shell navigation
+- keyboard-aware shell behavior should be shared across text-entry surfaces instead of handling each input with one-off viewport hacks
 - the auth screen remains the only signed-out surface until a session exists
 - theme defaults to `System` when the browser has no stored preference
 - explicit theme changes persist in browser local storage for the current device and browser
