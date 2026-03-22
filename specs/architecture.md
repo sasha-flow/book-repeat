@@ -101,7 +101,7 @@ The current import pipeline is synchronous inside the request lifecycle.
 1. The browser sends `multipart/form-data` with the selected file.
 2. The server validates the bearer token.
 3. The raw file is uploaded to the `imports` storage bucket.
-4. The file bytes are parsed with `sql.js`.
+4. The file bytes are parsed with the asset-free `sql.js` asm build on the server, which avoids runtime filesystem lookup for a separately packaged WASM asset.
 5. Source books are read from `BookHash`, `Books`, `BookAuthor`, and `Authors`, with every `BookHash.hash` retained for each source `book_id`.
 6. Existing canonical books are resolved through `book_source_hashes` using overlapping source hash sets.
 7. If one imported hash set overlaps multiple canonical books, those canonical books are auto-merged into one deterministic winner.

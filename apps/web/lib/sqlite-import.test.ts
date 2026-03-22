@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
-import path from "node:path";
 import test from "node:test";
 
-import initSqlJs from "sql.js";
+import initSqlJs from "sql.js/dist/sql-asm.js";
 
-const { parseSqlitePayload } = (await import(
+const sqliteImportModule = (await import(
   new URL("./sqlite-import.ts", import.meta.url).href
 )) as typeof import("./sqlite-import");
+const { parseSqlitePayload } = sqliteImportModule;
 
 async function createSqlitePayload(statements: string[]): Promise<ArrayBuffer> {
-  const SQL = await initSqlJs({
-    locateFile: (file: string) =>
-      path.join(process.cwd(), "node_modules/sql.js/dist", file),
-  });
+  const SQL = await initSqlJs();
 
   const db = new SQL.Database() as unknown as {
     run: (sql: string) => void;
@@ -33,10 +30,38 @@ async function createSqlitePayload(statements: string[]): Promise<ArrayBuffer> {
 function sortBooksBySourceBookId<T extends { source_book_id: number }>(
   books: T[],
 ): T[] {
-  return [...books].sort((left, right) =>
-    left.source_book_id - right.source_book_id,
+  return [...books].sort(
+    (left, right) => left.source_book_id - right.source_book_id,
   );
 }
+
+test("parseSqlitePayload bootstrap does not depend on process cwd", async () => {
+  const originalCwd = process.cwd;
+
+  process.cwd = () => "/tmp/vercel-function";
+
+  try {
+    const payload = await createSqlitePayload([
+      `CREATE TABLE Books (book_id INTEGER PRIMARY KEY, title TEXT);`,
+      `CREATE TABLE BookHash (book_id INTEGER NOT NULL, hash TEXT NOT NULL UNIQUE, timestamp INTEGER NOT NULL);`,
+      `INSERT INTO Books (book_id, title) VALUES (1, 'Alpha');`,
+      `INSERT INTO BookHash (book_id, hash, timestamp) VALUES (1, 'hash-a', 100);`,
+    ]);
+
+    const parsed = await parseSqlitePayload(payload);
+
+    assert.deepEqual(parsed.books, [
+      {
+        source_book_id: 1,
+        title: "Alpha",
+        authors: "",
+        source_hashes: ["hash-a"],
+      },
+    ]);
+  } finally {
+    process.cwd = originalCwd;
+  }
+});
 
 test("parseSqlitePayload reads source books with all hashes and preserves author order", async () => {
   const payload = await createSqlitePayload([

@@ -1,5 +1,4 @@
-import path from "node:path";
-import initSqlJs from "sql.js";
+import initSqlJs from "sql.js/dist/sql-asm.js";
 
 import { normalizeBookmarkType } from "./domain.ts";
 
@@ -242,10 +241,7 @@ function getBookHashDiagnostics(
 export async function parseSqlitePayload(
   fileBuffer: ArrayBuffer,
 ): Promise<ImportPayload> {
-  const SQL = await initSqlJs({
-    locateFile: (file: string) =>
-      path.join(process.cwd(), "node_modules/sql.js/dist", file),
-  });
+  const SQL = await initSqlJs();
 
   const db = new SQL.Database(new Uint8Array(fileBuffer));
   const existingTables = getExistingTables(db);
