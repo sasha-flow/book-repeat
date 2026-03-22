@@ -535,7 +535,10 @@ function BookmarkContextMenu({
         aria-label="Close context menu"
       />
       <div className={menuLayout.railClassName} style={menuLayout.overlayStyle}>
-        <div className={menuLayout.frameClassName} style={menuLayout.frameStyle}>
+        <div
+          className={menuLayout.frameClassName}
+          style={menuLayout.frameStyle}
+        >
           <div
             className={menuLayout.surfaceClassName}
             style={menuLayout.surfaceStyle}
