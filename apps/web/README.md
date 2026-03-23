@@ -10,7 +10,7 @@
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and set values from `supabase start` (or `supabase status`):
+Copy `apps/web/.env.example` to `apps/web/.env.local` and set values from `supabase start` (or `supabase status`):
 
 - `NEXT_PUBLIC_SUPABASE_URL` = `Project URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = `Publishable` (or `anon` in older CLI output)

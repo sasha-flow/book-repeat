@@ -80,7 +80,7 @@ The command prints values such as:
 - `Publishable` sometimes labeled `anon` by older Supabase CLI versions
 - `Secret` sometimes labeled `service_role` by older Supabase CLI versions
 
-4. Create `apps/web/.env.local` with:
+4. Copy `apps/web/.env.example` to `apps/web/.env.local` and update the values:
 
 - `NEXT_PUBLIC_SUPABASE_URL` = local `Project URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = local `Publishable` or `anon`
