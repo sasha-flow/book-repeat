@@ -51,9 +51,11 @@ Product expectations for this shell:
 
 - work comfortably on mobile-width layouts
 - keep navigation persistent and simple
-- keep the bottom navigation visible on the app's three primary shell screens
+- keep the top shell chrome and bottom navigation visible on the app's three primary shell screens
 - use dedicated nested-screen layouts with a back action instead of shell navigation on secondary routes
 - expose the app's three main tasks without secondary navigation depth
+- preserve non-default tab state in the URL so reloads and direct links can reopen `Upload` or `Profile`
+- react to the real visible viewport on mobile so the software keyboard does not make auth and search flows unusable
 
 ## Books experience
 
@@ -124,10 +126,13 @@ Current behavior:
 
 - accept a SQLite database file from the user
 - send the file to a server route with the current auth token
+- upload the raw file to a request-scoped storage key before parsing
 - parse source books, authors, and bookmarks on the server
 - deduplicate books per user by overlapping source hash sets and bookmarks per user by source UID
+- automatically merge canonical books when one incoming hash set bridges multiple existing books for the same user
 - write an import summary row
 - delete the uploaded file from storage after processing
+- keep detailed diagnostics in server logs while showing only generic failure text plus a request reference in the UI
 
 The upload flow is intended to be repeatable. Re-importing overlapping source files should not create duplicate books or bookmarks for the same user.
 
@@ -149,6 +154,7 @@ Signing out returns the user to the authentication screen and hides application 
 
 - all imported books and bookmarks belong to exactly one authenticated user
 - imported source identifiers are used to prevent duplicates inside that user's dataset
+- imported source hash aliases are used to reconcile one logical book across multiple exports and devices for the same user
 - bookmark reading order follows source `paragraph` and `word`
 - bookmark visibility in the reader is controlled by application bookmark types, not directly by source UI state
 - theme preference is a browser-local setting and does not sync through the backend

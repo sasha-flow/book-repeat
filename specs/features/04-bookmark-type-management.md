@@ -30,7 +30,7 @@ This feature covers classification of bookmarks into application-specific types 
 - bookmark type changes are independent from source file re-upload intent, but rely on stable imported bookmark identity
 - the reader uses bookmark type as the single application-level visibility model
 - changing bookmark type updates local reader state immediately so card styling and visibility match the active filter without a reload
-- touch-triggered opening uses a mobile-style hold delay with a small movement tolerance so normal finger jitter can still open the sheet while scrolling gestures are rejected
+- touch-triggered opening uses a 500 ms hold delay with a 10 px movement tolerance so normal finger jitter can still open the sheet while scrolling gestures are rejected
 - `header` bookmarks are rendered with emphasized heading styling
 - `hidden` bookmarks remain visible only in the `All` filter and use muted styling there
 

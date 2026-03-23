@@ -15,6 +15,7 @@ This feature covers the book detail screen used for reading imported bookmark te
 - `hidden` bookmarks are rendered as muted gray items when the active filter is `All`
 - the bookmark action sheet stays visually above the reader content with an opaque surface
 - on wider desktop viewports, the bookmark action sheet stays aligned to the same centered mobile-width column as the reader content instead of anchoring to the viewport edge
+- the sheet can be dismissed with backdrop tap, `Esc`, or the browser or phone back action
 
 ## Filter semantics
 

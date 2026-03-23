@@ -34,7 +34,7 @@ Deeper project documentation lives under [specs/product.md](specs/product.md), [
 
 ## Prerequisites
 
-- Node.js `>= 18`
+- Node.js `>= 24`
 - `pnpm`
 - Supabase CLI
 - Docker for local Supabase services
@@ -113,6 +113,7 @@ Run workspace-level checks:
 pnpm lint
 pnpm check-types
 pnpm build
+pnpm format
 ```
 
 ## Dependency policy
@@ -120,6 +121,7 @@ pnpm build
 - install new dependencies at the latest stable version
 - prefer package manager commands over manual version edits
 - use workspace maintenance commands when checking or updating dependencies
+- the workspace currently pins TypeScript `5.9.2` in root and app packages so local and CI type generation stay reproducible
 
 ```bash
 pnpm run deps:check

@@ -29,6 +29,7 @@ The browser client is responsible for:
 - session-aware rendering
 - tab navigation inside the mobile-first shell
 - keeping the primary shell chrome pinned on the three top-level tabs
+- deriving keyboard-aware viewport state from `window.visualViewport` so auth forms and search remain usable while the software keyboard is open
 - applying the selected light, dark, or system theme to the document root
 - fetching books and bookmarks from Supabase
 - applying client-side bookmark visibility filters
@@ -37,6 +38,8 @@ The browser client is responsible for:
 - uploading SQLite files to the server import route
 
 Most user-facing state lives in the client-side application shell implemented in `apps/web/app/app-client.tsx`.
+
+The App Router entry at `apps/web/app/page.tsx` renders that client shell behind a `Suspense` boundary because the shell reads `useSearchParams()` for top-level tab state and Next.js static prerendering requires that client hook to stay below a suspense boundary.
 
 The primary shell screens (`Books`, `Upload`, and `Profile`) share a pinned mobile chrome layout: the optional top header, the books search bar when present, and the bottom navigation remain fixed on-screen while the main content scrolls underneath reserved layout spacers. Nested routes such as the book reader bypass this shell and render their own page-specific layout with a back action instead of the shell navigation.
 
@@ -159,6 +162,7 @@ Current protections:
 - production schema management is migration-driven through the `supabase` directory
 - the server logs request-scoped JSON import diagnostics, duplicate summaries, bounded alias-lookup metrics, and normalized failure details to the console
 - the browser client logs import request failures and responses to the browser console while keeping user-facing failure text generic
+- the web app test suite uses the Node.js built-in test runner against colocated `lib/*.test.ts` files
 
 ## Current limitations
 

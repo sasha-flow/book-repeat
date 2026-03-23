@@ -12,11 +12,13 @@ Detailed schema, table fields, constraints, RLS policies, and database-side merg
 - source hash aliases persist cross-device reconciliation state for imported books
 - bookmarks persist user-readable imported content and current bookmark type
 - import runs persist lightweight operational history for completed imports
+- the database merge function persists canonical-book reconciliation as a single database-side operation instead of a sequence of client-managed row rewrites
 
 ## Storage model
 
 - uploaded SQLite files are stored in the private `imports` bucket
 - objects are written into a folder named after the authenticated user's id
+- the import route writes objects under request-scoped keys so overlapping uploads do not collide on filename
 - users can upload, read, and delete only objects in their own folder according to storage policies
 
 ## Application integrity rules

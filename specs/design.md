@@ -29,6 +29,7 @@ It is the cross-cutting design reference for implemented behavior only. It shoul
 - scrolling content should not visually bleed through fixed chrome or modal surfaces
 - borders and elevation are subtle and should separate surfaces without creating a heavy dashboard aesthetic
 - rounded corners come from the shared radius token and should stay visually consistent across reusable surfaces
+- reader action sheets should remain visually attached to the reading column: on wide viewports the modal rail may span the viewport, but the visible sheet content stays constrained to the same centered mobile-width column as the reader
 
 ## Theme and color system
 
