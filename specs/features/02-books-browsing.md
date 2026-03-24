@@ -11,6 +11,7 @@ This feature covers discovery and navigation of imported books.
 - the search field remains visible while the user scrolls the books list
 - when the mobile software keyboard opens during search, the search field remains visible and the filtered results continue to use the actual visible viewport instead of disappearing above it
 - each result navigates to a dedicated book detail route
+- reopening a book returns the user to the last saved bookmark-list position for that book on the same device and browser
 - the books area is the default signed-in destination
 
 ## Presentation rules

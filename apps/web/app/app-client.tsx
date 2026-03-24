@@ -52,6 +52,16 @@ import {
   nextBookmarkFilter,
 } from "../lib/bookmark-filters";
 import {
+  findCurrentBookmarkResumeAnchor,
+  findRestoreBookmark,
+} from "../lib/bookmark-resume";
+import {
+  loadStoredBookmarkResumeState,
+  saveStoredBookmarkResumeState,
+  type BookmarkResumeState,
+  type BookmarkResumeStorageLike,
+} from "../lib/bookmark-resume-storage";
+import {
   BOOKMARK_LONG_PRESS_DELAY_MS,
   createBookmarkLongPressGesture,
   type BookmarkLongPressGesture,
@@ -69,6 +79,9 @@ interface MenuState {
   bookmarkText: string;
   currentType: BookmarkType;
 }
+
+const BOOK_DETAIL_DEFAULT_FILTER: BookmarkFilter = "without-hidden";
+const BOOK_DETAIL_HEADER_FALLBACK_BOTTOM = 66;
 
 function getTouchPoints(touches: TouchEvent<HTMLLIElement>["touches"]) {
   return Array.from(touches, ({ identifier, clientX, clientY }) => ({
@@ -925,16 +938,120 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
     useAuthenticatedSession();
   const [book, setBook] = useState<BookRecord | null>(null);
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([]);
-  const [bookmarkFilter, setBookmarkFilter] =
-    useState<BookmarkFilter>("without-hidden");
+  const [bookmarkFilter, setBookmarkFilter] = useState<BookmarkFilter>(
+    BOOK_DETAIL_DEFAULT_FILTER,
+  );
   const [menuState, setMenuState] = useState<MenuState | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loadingBook, setLoadingBook] = useState(false);
+  const [resumeReady, setResumeReady] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressGesture = useRef<BookmarkLongPressGesture | null>(null);
   const menuHistoryActive = useRef(false);
+  const headerElement = useRef<HTMLElement | null>(null);
+  const bookmarkElements = useRef(new Map<string, HTMLLIElement>());
+  const pendingResumeState = useRef<BookmarkResumeState | null>(null);
+  const lastSavedResumeState = useRef<BookmarkResumeState | null>(null);
+  const scrollFrameId = useRef<number | null>(null);
 
   const visibleBookmarks = applyBookmarkFilter(bookmarks, bookmarkFilter);
+
+  const getHeaderBottom = useCallback(() => {
+    return (
+      headerElement.current?.getBoundingClientRect().bottom ??
+      BOOK_DETAIL_HEADER_FALLBACK_BOTTOM
+    );
+  }, []);
+
+  const saveBookmarkResume = useCallback(
+    (nextState: BookmarkResumeState) => {
+      const storage = getBookmarkResumeStorage();
+
+      if (!storage) {
+        return;
+      }
+
+      saveStoredBookmarkResumeState(storage, bookId, nextState);
+      lastSavedResumeState.current = nextState;
+    },
+    [bookId],
+  );
+
+  const captureVisibleBookmarkResume = useCallback(() => {
+    if (!resumeReady || loadingBook || !book || !visibleBookmarks.length) {
+      return null;
+    }
+
+    const rows = visibleBookmarks.flatMap((bookmark) => {
+      const element = bookmarkElements.current.get(bookmark.id);
+
+      if (!element) {
+        return [];
+      }
+
+      const rect = element.getBoundingClientRect();
+
+      return [
+        {
+          bookmarkId: bookmark.id,
+          top: rect.top,
+          bottom: rect.bottom,
+          paragraph: bookmark.paragraph,
+          word: bookmark.word,
+        },
+      ];
+    });
+
+    const anchor = findCurrentBookmarkResumeAnchor({
+      headerBottom: getHeaderBottom(),
+      rows,
+      viewportBottom: window.innerHeight,
+    });
+
+    if (!anchor) {
+      return null;
+    }
+
+    return {
+      bookmarkFilter,
+      bookmarkId: anchor.bookmarkId,
+      paragraph: anchor.paragraph,
+      word: anchor.word,
+      savedAt: Date.now(),
+    } satisfies BookmarkResumeState;
+  }, [
+    bookmarkFilter,
+    book,
+    getHeaderBottom,
+    loadingBook,
+    resumeReady,
+    visibleBookmarks,
+  ]);
+
+  const flushBookmarkResume = useCallback(() => {
+    const nextState = captureVisibleBookmarkResume();
+
+    if (nextState) {
+      saveBookmarkResume(nextState);
+    }
+  }, [captureVisibleBookmarkResume, saveBookmarkResume]);
+
+  useEffect(() => {
+    bookmarkElements.current.clear();
+    pendingResumeState.current = null;
+    lastSavedResumeState.current = null;
+    setResumeReady(false);
+
+    const storage = getBookmarkResumeStorage();
+    const savedState = storage
+      ? loadStoredBookmarkResumeState(storage, bookId)
+      : null;
+
+    pendingResumeState.current = savedState;
+    lastSavedResumeState.current = savedState;
+    setBookmarkFilter(savedState?.bookmarkFilter ?? BOOK_DETAIL_DEFAULT_FILTER);
+    setResumeReady(true);
+  }, [bookId]);
 
   useEffect(() => {
     if (!session) {
@@ -1045,6 +1162,125 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
 
   useEffect(() => clearLongPress, [clearLongPress]);
 
+  useEffect(() => {
+    if (!resumeReady || loadingBook || !book) {
+      return;
+    }
+
+    const pendingState = pendingResumeState.current;
+
+    if (!pendingState) {
+      return;
+    }
+
+    if (pendingState.bookmarkFilter !== bookmarkFilter) {
+      return;
+    }
+
+    const targetBookmark = findRestoreBookmark(visibleBookmarks, pendingState);
+
+    if (!targetBookmark) {
+      pendingResumeState.current = null;
+      return;
+    }
+
+    const targetElement = bookmarkElements.current.get(targetBookmark.id);
+
+    if (!targetElement) {
+      return;
+    }
+
+    const targetTop =
+      targetElement.getBoundingClientRect().top +
+      window.scrollY -
+      getHeaderBottom();
+
+    window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
+
+    const restoredState = {
+      bookmarkFilter,
+      bookmarkId: targetBookmark.id,
+      paragraph: targetBookmark.paragraph,
+      word: targetBookmark.word,
+      savedAt: pendingState.savedAt,
+    } satisfies BookmarkResumeState;
+
+    pendingResumeState.current = null;
+    lastSavedResumeState.current = restoredState;
+  }, [
+    bookmarkFilter,
+    book,
+    getHeaderBottom,
+    loadingBook,
+    resumeReady,
+    visibleBookmarks,
+  ]);
+
+  useEffect(() => {
+    if (!resumeReady || loadingBook || !book) {
+      return;
+    }
+
+    const nextState =
+      captureVisibleBookmarkResume() ??
+      (lastSavedResumeState.current
+        ? {
+            ...lastSavedResumeState.current,
+            bookmarkFilter,
+            savedAt: Date.now(),
+          }
+        : null);
+
+    if (!nextState) {
+      return;
+    }
+
+    saveBookmarkResume(nextState);
+  }, [
+    bookmarkFilter,
+    book,
+    captureVisibleBookmarkResume,
+    loadingBook,
+    resumeReady,
+    saveBookmarkResume,
+    visibleBookmarks,
+  ]);
+
+  useEffect(() => {
+    if (!resumeReady || loadingBook || !book) {
+      return;
+    }
+
+    const scheduleFlush = () => {
+      if (scrollFrameId.current !== null) {
+        return;
+      }
+
+      scrollFrameId.current = window.requestAnimationFrame(() => {
+        scrollFrameId.current = null;
+        flushBookmarkResume();
+      });
+    };
+
+    const handlePageHide = () => {
+      flushBookmarkResume();
+    };
+
+    window.addEventListener("scroll", scheduleFlush, { passive: true });
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      if (scrollFrameId.current !== null) {
+        window.cancelAnimationFrame(scrollFrameId.current);
+        scrollFrameId.current = null;
+      }
+
+      window.removeEventListener("scroll", scheduleFlush);
+      window.removeEventListener("pagehide", handlePageHide);
+      flushBookmarkResume();
+    };
+  }, [book, flushBookmarkResume, loadingBook, resumeReady]);
+
   const handleLongPressStart = (
     event: TouchEvent<HTMLLIElement>,
     bookmark: BookmarkRecord,
@@ -1128,6 +1364,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
         style={{ maxWidth: 393.256 }}
       >
         <header
+          ref={headerElement}
           className="fixed top-0 left-0 right-0 z-30 bg-background"
           style={opaqueHeaderSurfaceStyle}
         >
@@ -1292,6 +1529,17 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
                   return (
                     <li
                       key={bookmark.id}
+                      ref={(element) => {
+                        if (element) {
+                          bookmarkElements.current.set(bookmark.id, element);
+                          return;
+                        }
+
+                        bookmarkElements.current.delete(bookmark.id);
+                      }}
+                      data-bookmark-id={bookmark.id}
+                      data-bookmark-paragraph={bookmark.paragraph}
+                      data-bookmark-word={bookmark.word}
                       onContextMenu={(event) => {
                         event.preventDefault();
                         openMenu(bookmark);
@@ -1385,4 +1633,16 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
       />
     </>
   );
+}
+
+function getBookmarkResumeStorage(): BookmarkResumeStorageLike | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
