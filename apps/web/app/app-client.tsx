@@ -11,10 +11,9 @@ import {
 import type { ReactNode, TouchEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  BookOpen,
   Check,
   Copy,
   EyeOff,
@@ -23,6 +22,7 @@ import {
   Heading,
   Search,
   Type,
+  X,
   User as UserIcon,
 } from "lucide-react";
 import { Button } from "@repo/ui/components/button";
@@ -46,6 +46,15 @@ import {
   getAppShellLayoutMetrics,
   type AppShellChromeMode,
 } from "../lib/app-shell-layout";
+import {
+  clearBooksSearchQuery,
+  createBooksSearchState,
+  dismissBooksSearch,
+  openBooksSearch,
+  updateBooksSearchQuery,
+} from "../lib/books-search-state";
+import { getBooksSearchFabStyles } from "../lib/books-search-fab";
+import { getBooksListResumeInsets } from "../lib/books-screen-layout";
 import { useKeyboardViewport } from "../lib/keyboard-viewport";
 import {
   applyBookmarkFilter,
@@ -79,9 +88,8 @@ import {
 import { getBookmarkContextMenuLayout } from "../lib/bookmark-context-menu-styles";
 import { getOpaqueHeaderSurfaceStyle } from "../lib/book-detail-styles";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
+import { MobilePageHeader, MobilePageHeaderButton } from "./mobile-page-header";
 import { ThemeToggle } from "./theme-toggle";
-
-type Tab = "books" | "upload" | "user";
 
 interface MenuState {
   bookmarkId: string;
@@ -91,8 +99,6 @@ interface MenuState {
 
 const BOOK_DETAIL_DEFAULT_FILTER: BookmarkFilter = "without-hidden";
 const BOOK_DETAIL_HEADER_FALLBACK_BOTTOM = 66;
-const BOOKS_LIST_BOTTOM_BAR_HEIGHT = 69.079;
-const BOOKS_LIST_NAV_HEIGHT = 65.098;
 const BOOKS_LIST_HIGHLIGHT_DURATION_MS = 367;
 
 function getTouchPoints(touches: TouchEvent<HTMLLIElement>["touches"]) {
@@ -101,22 +107,6 @@ function getTouchPoints(touches: TouchEvent<HTMLLIElement>["touches"]) {
     clientX,
     clientY,
   }));
-}
-
-function getTabFromSearchParam(value: string | null): Tab {
-  if (value === "upload" || value === "user") {
-    return value;
-  }
-
-  return "books";
-}
-
-function getTabHref(tab: Tab): string {
-  if (tab === "books") {
-    return "/";
-  }
-
-  return `/?tab=${tab}`;
 }
 
 function AuthScreen({
@@ -243,41 +233,7 @@ function useAuthenticatedSession() {
   return { supabase, session, loadingSession, setSession };
 }
 
-function ShellNavButton({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: typeof BookOpen;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`flex flex-1 flex-col items-center justify-center gap-[3.998px] px-0 pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] transition-colors ${
-        active
-          ? "text-foreground"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
-      style={{
-        paddingTop: 10.005,
-        paddingBottom: "calc(env(safe-area-inset-bottom) + 10.004px)",
-      }}
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-    >
-      <Icon className="size-[23.99px]" strokeWidth={1.9} />
-      <span className="font-normal">{label}</span>
-    </button>
-  );
-}
-
 function AppShell({
-  activeTab,
-  onTabChange,
   children,
   overlay,
   header,
@@ -286,8 +242,6 @@ function AppShell({
   keyboardOpen = false,
   viewportHeight,
 }: {
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
   children: ReactNode;
   overlay?: ReactNode;
   header?: ReactNode;
@@ -296,9 +250,9 @@ function AppShell({
   keyboardOpen?: boolean;
   viewportHeight?: number;
 }) {
+  const opaqueHeaderSurfaceStyle = getOpaqueHeaderSurfaceStyle();
   const {
     headerClassName,
-    navClassName,
     bottomBarClassName,
     bottomBarPlacement,
     mainClassName,
@@ -307,7 +261,6 @@ function AppShell({
     needsHeaderSpacer,
     needsTopBottomBarSpacer,
     needsBottomBarSpacer,
-    needsNavSpacer,
   } = getAppShellLayoutMetrics({
     chromeMode,
     hasBottomBar: Boolean(bottomBar),
@@ -331,14 +284,23 @@ function AppShell({
           {needsHeaderSpacer ? (
             <div
               aria-hidden="true"
-              className="mx-auto w-full max-w-md border-b px-4 py-3 invisible pointer-events-none"
+              className="mx-auto w-full invisible pointer-events-none"
+              style={{ maxWidth: 393.256 }}
             >
               {header}
             </div>
           ) : null}
           <header className={headerClassName}>
-            <div className="mx-auto w-full max-w-md border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-              {header}
+            <div className="bg-background" style={opaqueHeaderSurfaceStyle}>
+              <div
+                className="mx-auto w-full bg-background"
+                style={{
+                  ...opaqueHeaderSurfaceStyle,
+                  maxWidth: 393.256,
+                }}
+              >
+                {header}
+              </div>
             </div>
           </header>
         </>
@@ -386,59 +348,117 @@ function AppShell({
         </>
       ) : null}
 
-      {needsNavSpacer ? (
-        <div
-          aria-hidden="true"
-          className="mx-auto w-full invisible pointer-events-none"
-          style={{ maxWidth: 393.256 }}
-        >
-          <div className="flex h-[65.098px] items-stretch border-t-[1.108px] border-border bg-background">
-            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-foreground">
-              <BookOpen className="size-[23.99px]" strokeWidth={1.9} />
-              <span className="font-normal">Books</span>
-            </div>
-            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-muted-foreground">
-              <FileUp className="size-[23.99px]" strokeWidth={1.9} />
-              <span className="font-normal">Upload</span>
-            </div>
-            <div className="flex flex-1 flex-col items-center justify-center gap-[3.998px] pb-[calc(env(safe-area-inset-bottom)+10.004px)] pt-[10.005px] text-[12px] leading-[16px] text-muted-foreground">
-              <UserIcon className="size-[23.99px]" strokeWidth={1.9} />
-              <span className="font-normal">Profile</span>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <nav className={navClassName}>
-        <div
-          className="mx-auto flex h-[65.098px] w-full items-stretch border-t-[1.108px] border-border bg-background"
-          style={{
-            ...chromeSurfaceStyle,
-            maxWidth: 393.256,
-          }}
-        >
-          <ShellNavButton
-            active={activeTab === "books"}
-            icon={BookOpen}
-            label="Books"
-            onClick={() => onTabChange("books")}
-          />
-          <ShellNavButton
-            active={activeTab === "upload"}
-            icon={FileUp}
-            label="Upload"
-            onClick={() => onTabChange("upload")}
-          />
-          <ShellNavButton
-            active={activeTab === "user"}
-            icon={UserIcon}
-            label="Profile"
-            onClick={() => onTabChange("user")}
-          />
-        </div>
-      </nav>
-
       {overlay}
+    </div>
+  );
+}
+
+function BackButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <MobilePageHeaderButton onClick={onClick} aria-label={label}>
+      <ArrowLeft className="size-6" strokeWidth={1.9} />
+    </MobilePageHeaderButton>
+  );
+}
+
+function BooksSearchFab({ onOpen }: { onOpen: () => void }) {
+  const fabStyles = getBooksSearchFabStyles();
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-30 pointer-events-none">
+      <div
+        className="mx-auto flex w-full justify-end px-4"
+        style={{
+          maxWidth: 393.256,
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)",
+        }}
+      >
+        <div className={fabStyles.frameClassName}>
+          <Button
+            type="button"
+            size="icon"
+            className={fabStyles.buttonClassName}
+            onClick={onOpen}
+            aria-label="Open book search"
+          >
+            <Search className={fabStyles.iconClassName} strokeWidth={1.9} />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BooksSearchBar({
+  value,
+  inputRef,
+  onChange,
+  onClear,
+  onCancel,
+}: {
+  value: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onChange: (value: string) => void;
+  onClear: () => void;
+  onCancel: () => void;
+}) {
+  const hasValue = value.length > 0;
+
+  return (
+    <div className="flex h-[35.985px] w-full items-center gap-2">
+      <div className="relative h-[35.985px] min-w-0 flex-1">
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute left-[12px] top-[7.99px] size-[19.992px] text-muted-foreground"
+          strokeWidth={1.9}
+        />
+        <Input
+          ref={inputRef}
+          type="text"
+          inputMode="search"
+          autoComplete="off"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Search books..."
+          aria-label="Search books"
+          className="h-[35.985px] rounded-[8px] border-[1.108px] border-input bg-background px-0 py-0 text-[16px] font-normal text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0"
+          style={{
+            paddingLeft: 40,
+            paddingRight: hasValue ? 44 : 12,
+            paddingTop: 4,
+            paddingBottom: 4,
+            WebkitAppearance: "none",
+            appearance: "none",
+          }}
+        />
+        {hasValue ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-[2px] top-[1.99px] size-8 rounded-[8px]"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={onClear}
+            aria-label="Clear search"
+          >
+            <X className="size-4" strokeWidth={1.9} />
+          </Button>
+        ) : null}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-9 shrink-0 px-2 text-[15px] font-medium"
+        onClick={onCancel}
+      >
+        Cancel
+      </Button>
     </div>
   );
 }
@@ -719,24 +739,24 @@ function BookmarkContextMenu({
 export function AppClient() {
   const keyboardViewport = useKeyboardViewport();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeTab = getTabFromSearchParam(searchParams.get("tab"));
   const { supabase, session, loadingSession, setSession } =
     useAuthenticatedSession();
   const [books, setBooks] = useState<BookRecord[]>([]);
-  const [bookQuery, setBookQuery] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [booksSearch, setBooksSearch] = useState(createBooksSearchState);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [highlightedBookId, setHighlightedBookId] = useState<string | null>(
     null,
   );
   const [bookListResumeReady, setBookListResumeReady] = useState(false);
-  const deferredBookQuery = useDeferredValue(bookQuery);
+  const deferredBookQuery = useDeferredValue(booksSearch.query);
   const bookListElements = useRef(new Map<string, HTMLLIElement>());
   const pendingBookListResumeState = useRef<BookListResumeState | null>(null);
   const highlightTimer = useRef<number | null>(null);
   const highlightFrame = useRef<number | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchHistoryActive = useRef(false);
+  const isSearchOpen = booksSearch.isOpen;
+  const bookQuery = booksSearch.query;
 
   const visibleBooks = useMemo(() => {
     const normalizedQuery = deferredBookQuery.trim().toLowerCase();
@@ -780,6 +800,27 @@ export function AppClient() {
     });
   }, []);
 
+  const openSearch = useCallback(() => {
+    setBooksSearch((state) => openBooksSearch(state));
+  }, []);
+
+  const updateSearchQuery = useCallback((query: string) => {
+    setBooksSearch((state) => updateBooksSearchQuery(state, query));
+  }, []);
+
+  const clearSearchQuery = useCallback(() => {
+    setBooksSearch((state) => clearBooksSearchQuery(state));
+  }, []);
+
+  const dismissSearch = useCallback(() => {
+    if (searchHistoryActive.current) {
+      window.history.back();
+      return;
+    }
+
+    setBooksSearch(dismissBooksSearch());
+  }, []);
+
   const loadBooks = useCallback(async () => {
     setLoadingBooks(true);
     const { data: bookmarkRows, error: bookmarkRowsError } = await supabase
@@ -790,7 +831,9 @@ export function AppClient() {
 
     if (bookmarkRowsError) {
       setLoadingBooks(false);
-      setUploadMessage(bookmarkRowsError.message);
+      console.error("[books] failed to load bookmark rows", {
+        message: bookmarkRowsError.message,
+      });
       return;
     }
 
@@ -815,7 +858,9 @@ export function AppClient() {
     setLoadingBooks(false);
 
     if (error) {
-      setUploadMessage(error.message);
+      console.error("[books] failed to load books", {
+        message: error.message,
+      });
       return;
     }
 
@@ -832,7 +877,9 @@ export function AppClient() {
   }, [session, loadBooks]);
 
   useEffect(() => {
-    if (activeTab !== "books") {
+    if (!session) {
+      pendingBookListResumeState.current = null;
+      setHighlightedBookId(null);
       setBookListResumeReady(false);
       return;
     }
@@ -843,15 +890,10 @@ export function AppClient() {
     pendingBookListResumeState.current = savedState;
     setHighlightedBookId(null);
     setBookListResumeReady(true);
-  }, [activeTab]);
+  }, [session]);
 
   useEffect(() => {
-    if (
-      activeTab !== "books" ||
-      !bookListResumeReady ||
-      loadingBooks ||
-      !visibleBooks.length
-    ) {
+    if (!bookListResumeReady || loadingBooks || !visibleBooks.length) {
       return;
     }
 
@@ -877,17 +919,17 @@ export function AppClient() {
     pendingBookListResumeState.current = null;
 
     const rect = targetElement.getBoundingClientRect();
+    const resumeInsets = getBooksListResumeInsets({
+      searchOpen: isSearchOpen,
+      keyboardOpen: keyboardViewport.keyboardOpen,
+    });
     const targetTop = getBookListResumeScrollTop({
       itemTop: rect.top,
       itemHeight: rect.height,
       scrollY: window.scrollY,
       viewportHeight: window.innerHeight,
-      topInset: keyboardViewport.keyboardOpen
-        ? BOOKS_LIST_BOTTOM_BAR_HEIGHT
-        : 0,
-      bottomInset: keyboardViewport.keyboardOpen
-        ? 0
-        : BOOKS_LIST_BOTTOM_BAR_HEIGHT + BOOKS_LIST_NAV_HEIGHT,
+      topInset: resumeInsets.topInset,
+      bottomInset: resumeInsets.bottomInset,
     });
 
     window.scrollTo({ top: targetTop, behavior: "auto" });
@@ -904,12 +946,63 @@ export function AppClient() {
       });
     });
   }, [
-    activeTab,
     bookListResumeReady,
+    isSearchOpen,
     keyboardViewport.keyboardOpen,
     loadingBooks,
     visibleBooks,
   ]);
+
+  useEffect(() => {
+    if (!isSearchOpen) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isSearchOpen]);
+
+  useEffect(() => {
+    if (!isSearchOpen) {
+      return;
+    }
+
+    if (!searchHistoryActive.current) {
+      window.history.pushState({ booksSearch: true }, "");
+      searchHistoryActive.current = true;
+    }
+
+    const handlePopState = () => {
+      if (!searchHistoryActive.current) {
+        return;
+      }
+
+      searchHistoryActive.current = false;
+      setBooksSearch(dismissBooksSearch());
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+      dismissSearch();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [dismissSearch, isSearchOpen]);
 
   useEffect(() => {
     if (!highlightedBookId) {
@@ -942,75 +1035,182 @@ export function AppClient() {
     };
   }, []);
 
-  const uploadFile = async (file: File) => {
-    if (!session) {
-      return;
-    }
+  if (loadingSession) {
+    return <main className="p-6 text-sm">Loading...</main>;
+  }
 
-    setUploading(true);
-    setUploadMessage(null);
+  if (!session) {
+    return <AuthScreen onSignedIn={setSession} />;
+  }
 
-    const formData = new FormData();
-    formData.append("file", file);
+  return (
+    <AppShell
+      chromeMode="pinned"
+      keyboardOpen={keyboardViewport.keyboardOpen}
+      viewportHeight={keyboardViewport.viewportHeight}
+      header={
+        <MobilePageHeader
+          title="Books"
+          trailing={
+            <div className="flex items-center gap-1">
+              <MobilePageHeaderButton
+                onClick={() => router.push("/upload")}
+                aria-label="Open upload page"
+              >
+                <FileUp className="size-5" strokeWidth={1.9} />
+              </MobilePageHeaderButton>
+              <MobilePageHeaderButton
+                onClick={() => router.push("/profile")}
+                aria-label="Open profile page"
+              >
+                <UserIcon className="size-5" strokeWidth={1.9} />
+              </MobilePageHeaderButton>
+            </div>
+          }
+        />
+      }
+      bottomBar={
+        isSearchOpen ? (
+          <BooksSearchBar
+            value={bookQuery}
+            inputRef={searchInputRef}
+            onChange={updateSearchQuery}
+            onClear={() => {
+              clearSearchQuery();
+              searchInputRef.current?.focus();
+            }}
+            onCancel={dismissSearch}
+          />
+        ) : undefined
+      }
+      overlay={
+        !isSearchOpen ? <BooksSearchFab onOpen={openSearch} /> : undefined
+      }
+    >
+      <BooksList
+        books={visibleBooks}
+        loadingBooks={loadingBooks}
+        highlightedBookId={highlightedBookId}
+        onBookSelect={handleBookSelect}
+        onBookElement={handleBookElement}
+      />
+    </AppShell>
+  );
+}
 
-    try {
-      const response = await fetch("/api/import-sqlite", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: formData,
-      });
+export function UploadPageClient() {
+  const keyboardViewport = useKeyboardViewport();
+  const router = useRouter();
+  const { session, loadingSession, setSession } = useAuthenticatedSession();
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
 
-      const responseJson = (await response.json()) as {
-        error?: string;
-        details?: unknown;
-        books?: number;
-        bookmarks?: number;
-        fileDeleted?: boolean;
-        deleteError?: string | null;
-      };
-
-      setUploading(false);
-
-      if (!response.ok) {
-        console.error("[upload] import request failed", {
-          fileName: file.name,
-          fileSize: file.size,
-          status: response.status,
-          response: responseJson,
-        });
-        setUploadMessage(responseJson.error ?? "Import failed");
+  const uploadFile = useCallback(
+    async (file: File) => {
+      if (!session) {
         return;
       }
 
-      console.info("[upload] import request completed", {
-        fileName: file.name,
-        fileSize: file.size,
-        response: responseJson,
-      });
+      setUploading(true);
+      setUploadMessage(null);
 
-      const deletedText = responseJson.fileDeleted
-        ? "File deleted"
-        : "Delete retry needed";
-      setUploadMessage(
-        `Imported books: ${responseJson.books ?? 0}, bookmarks: ${responseJson.bookmarks ?? 0}. ${deletedText}.`,
-      );
+      const formData = new FormData();
+      formData.append("file", file);
 
-      await loadBooks();
-    } catch (error) {
-      setUploading(false);
-      console.error("[upload] import request threw unexpectedly", {
-        fileName: file.name,
-        fileSize: file.size,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? (error.stack ?? null) : null,
-      });
-      setUploadMessage(
-        "Import failed before the server returned a response. Check browser and server logs for details.",
-      );
-    }
-  };
+      try {
+        const response = await fetch("/api/import-sqlite", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        });
+
+        const responseJson = (await response.json()) as {
+          error?: string;
+          books?: number;
+          bookmarks?: number;
+          fileDeleted?: boolean;
+        };
+
+        setUploading(false);
+
+        if (!response.ok) {
+          console.error("[upload] import request failed", {
+            fileName: file.name,
+            fileSize: file.size,
+            status: response.status,
+            response: responseJson,
+          });
+          setUploadMessage(responseJson.error ?? "Import failed");
+          return;
+        }
+
+        const deletedText = responseJson.fileDeleted
+          ? "File deleted"
+          : "Delete retry needed";
+        setUploadMessage(
+          `Imported books: ${responseJson.books ?? 0}, bookmarks: ${responseJson.bookmarks ?? 0}. ${deletedText}.`,
+        );
+      } catch (error) {
+        setUploading(false);
+        console.error("[upload] import request threw unexpectedly", {
+          fileName: file.name,
+          fileSize: file.size,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? (error.stack ?? null) : null,
+        });
+        setUploadMessage(
+          "Import failed before the server returned a response. Check browser and server logs for details.",
+        );
+      }
+    },
+    [session],
+  );
+
+  if (loadingSession) {
+    return <main className="p-6 text-sm">Loading...</main>;
+  }
+
+  if (!session) {
+    return <AuthScreen onSignedIn={setSession} />;
+  }
+
+  return (
+    <AppShell
+      chromeMode="pinned"
+      keyboardOpen={keyboardViewport.keyboardOpen}
+      viewportHeight={keyboardViewport.viewportHeight}
+      header={
+        <MobilePageHeader
+          title="Upload"
+          leading={
+            <BackButton
+              label="Back to books"
+              onClick={() => {
+                router.push("/");
+              }}
+            />
+          }
+        />
+      }
+    >
+      <UploadSection
+        uploading={uploading}
+        uploadMessage={uploadMessage}
+        onUpload={(file) => {
+          void uploadFile(file);
+        }}
+      />
+    </AppShell>
+  );
+}
+
+export function ProfilePageClient() {
+  const keyboardViewport = useKeyboardViewport();
+  const router = useRouter();
+  const { supabase, session, loadingSession, setSession } =
+    useAuthenticatedSession();
 
   if (loadingSession) {
     return <main className="p-6 text-sm">Loading...</main>;
@@ -1023,68 +1223,25 @@ export function AppClient() {
   const userLabel =
     session.user.user_metadata.name ?? session.user.email ?? session.user.id;
 
-  let content: ReactNode = null;
-  let header: ReactNode = null;
-  let bottomBar: ReactNode = null;
-
-  if (activeTab === "books") {
-    bottomBar = (
-      <div className="relative h-[35.985px] w-full">
-        <Search
-          aria-hidden="true"
-          className="pointer-events-none absolute left-[12px] top-[7.99px] size-[19.992px] text-muted-foreground"
-          strokeWidth={1.9}
+  return (
+    <AppShell
+      chromeMode="pinned"
+      keyboardOpen={keyboardViewport.keyboardOpen}
+      viewportHeight={keyboardViewport.viewportHeight}
+      header={
+        <MobilePageHeader
+          title="Profile"
+          leading={
+            <BackButton
+              label="Back to books"
+              onClick={() => {
+                router.push("/");
+              }}
+            />
+          }
         />
-        <Input
-          type="text"
-          inputMode="search"
-          autoComplete="off"
-          value={bookQuery}
-          onChange={(event) => setBookQuery(event.target.value)}
-          placeholder="Search books..."
-          aria-label="Search books"
-          className="h-[35.985px] rounded-[8px] border-[1.108px] border-input bg-background px-0 py-0 text-[16px] font-normal text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0"
-          style={{
-            paddingLeft: 40,
-            paddingRight: 12,
-            paddingTop: 4,
-            paddingBottom: 4,
-            WebkitAppearance: "none",
-            appearance: "none",
-          }}
-        />
-      </div>
-    );
-
-    content = (
-      <BooksList
-        books={visibleBooks}
-        loadingBooks={loadingBooks}
-        highlightedBookId={highlightedBookId}
-        onBookSelect={handleBookSelect}
-        onBookElement={handleBookElement}
-      />
-    );
-  }
-
-  if (activeTab === "upload") {
-    header = <h2 className="text-sm font-semibold">Upload</h2>;
-
-    content = (
-      <UploadSection
-        uploading={uploading}
-        uploadMessage={uploadMessage}
-        onUpload={(file) => {
-          void uploadFile(file);
-        }}
-      />
-    );
-  }
-
-  if (activeTab === "user") {
-    header = <h2 className="text-sm font-semibold">User</h2>;
-
-    content = (
+      }
+    >
       <UserSection
         userLabel={userLabel}
         onLogout={async () => {
@@ -1092,22 +1249,6 @@ export function AppClient() {
           setSession(null);
         }}
       />
-    );
-  }
-
-  return (
-    <AppShell
-      activeTab={activeTab}
-      onTabChange={(tab) => {
-        router.replace(getTabHref(tab));
-      }}
-      chromeMode="pinned"
-      keyboardOpen={keyboardViewport.keyboardOpen}
-      viewportHeight={keyboardViewport.viewportHeight}
-      header={header}
-      bottomBar={bottomBar}
-    >
-      {content}
     </AppShell>
   );
 }
@@ -1556,67 +1697,32 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
               maxWidth: 393.256,
             }}
           >
-            <div
-              className="relative border-b border-border bg-background"
-              style={{
-                ...opaqueHeaderSurfaceStyle,
-                height: 65.081,
-                borderBottomWidth: 1.108,
-                borderBottomColor: "var(--border)",
-              }}
-            >
-              <button
-                type="button"
-                className="absolute flex items-center justify-center rounded-[10px] text-foreground transition-colors hover:bg-accent"
-                style={{
-                  left: 15.993,
-                  top: 12,
-                  width: 39.983,
-                  height: 39.983,
-                }}
-                onClick={() => {
-                  router.push("/");
-                }}
-                aria-label="Back to books"
-              >
-                <ArrowLeft className="size-[23.99px]" strokeWidth={1.9} />
-              </button>
-
-              <div
-                className="absolute flex items-center justify-center px-2"
-                style={{
-                  left: 55.98,
-                  right: 55.98,
-                  top: 17,
-                  height: 30,
-                }}
-              >
-                <h1 className="line-clamp-1 text-center text-[20px] font-medium leading-[30px] text-foreground">
-                  {book?.title ?? "Book bookmarks"}
-                </h1>
-              </div>
-
-              <button
-                type="button"
-                className="absolute flex flex-col items-center justify-center rounded-[10px] text-foreground transition-colors hover:bg-accent"
-                style={{
-                  right: 15.993,
-                  top: 12,
-                  width: 39.983,
-                  height: 39.983,
-                  gap: 1.5,
-                }}
-                onClick={() =>
-                  setBookmarkFilter((current) => nextBookmarkFilter(current))
-                }
-                aria-label={`Change bookmark filter. Current filter: ${bookmarkFilterLabels[bookmarkFilter]}`}
-              >
-                <Filter className="size-[18px]" strokeWidth={1.9} />
-                <span className="text-[10px] leading-[10px] text-foreground">
-                  {bookmarkFilterLabels[bookmarkFilter]}
-                </span>
-              </button>
-            </div>
+            <MobilePageHeader
+              title={book?.title ?? "Book bookmarks"}
+              leading={
+                <BackButton
+                  label="Back to books"
+                  onClick={() => {
+                    router.push("/");
+                  }}
+                />
+              }
+              trailing={
+                <MobilePageHeaderButton
+                  className="flex-col"
+                  style={{ gap: 1.5 }}
+                  onClick={() =>
+                    setBookmarkFilter((current) => nextBookmarkFilter(current))
+                  }
+                  aria-label={`Change bookmark filter. Current filter: ${bookmarkFilterLabels[bookmarkFilter]}`}
+                >
+                  <Filter className="size-[18px]" strokeWidth={1.9} />
+                  <span className="text-[10px] leading-[10px] text-foreground">
+                    {bookmarkFilterLabels[bookmarkFilter]}
+                  </span>
+                </MobilePageHeaderButton>
+              }
+            />
           </div>
         </header>
 

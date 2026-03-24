@@ -18,13 +18,13 @@ This document describes the current implemented behavior only.
 
 1. The user opens the application and sees the authentication screen if there is no active session.
 2. The user signs in with email and password, or switches the auth card into sign-up mode to create an account.
-3. After authentication, the user lands in the mobile-first app shell.
-4. The user uploads a SQLite file from the `Upload` tab.
+3. After authentication, the user lands on the `Books` screen at `/`.
+4. The user opens the dedicated `Upload` page from the books top bar and uploads a SQLite file.
 5. The system imports books and bookmarks into the user's own dataset.
-6. The user opens the `Books` tab to browse imported books.
+6. The user returns to `Books` to browse imported books.
 7. The user opens a book, filters visible bookmarks, and optionally changes bookmark types.
-8. The user opens the `Profile` tab to inspect the current account and sign out.
-9. The user can switch the application appearance between `Light`, `Dark`, and `System` from the `Profile` tab.
+8. The user opens the dedicated `Profile` page from the books top bar to inspect the current account and sign out.
+9. The user can switch the application appearance between `Light`, `Dark`, and `System` from the `Profile` page.
 
 ## Signed-out experience
 
@@ -41,21 +41,17 @@ If sign-up succeeds without an immediate session, the screen shows a follow-up m
 
 ## Signed-in application shell
 
-The signed-in experience is built around a mobile-first shell with three bottom navigation destinations:
-
-- `Books`
-- `Upload`
-- `Profile`
+The signed-in experience is built around a books-first mobile shell with one primary home route and two secondary pages reached from the books header.
 
 Product expectations for this shell:
 
 - work comfortably on mobile-width layouts
-- keep navigation persistent and simple
-- keep the top shell chrome and bottom navigation visible on the app's three primary shell screens
-- use dedicated nested-screen layouts with a back action instead of shell navigation on secondary routes
-- expose the app's three main tasks without secondary navigation depth
-- preserve non-default tab state in the URL so reloads and direct links can reopen `Upload` or `Profile`
+- keep navigation shallow and simple without a persistent bottom tab bar
+- keep the books top chrome visible while browsing the home screen
+- use dedicated page layouts with a back action for `Upload`, `Profile`, and nested reading routes
+- expose `Upload` and `Profile` from the books top bar instead of a separate shell navigation row
 - react to the real visible viewport on mobile so the software keyboard does not make auth and search flows unusable
+- keep top-level signed-in headers visually consistent across books, upload, profile, and reader screens
 
 ## Books experience
 
@@ -65,9 +61,14 @@ Current behavior:
 
 - fetch books that belong to the authenticated user
 - allow free-text search over title and authors
-- keep the search field visible while browsing the books list
+- start with the books list visible and no search field on screen
+- expose search through a floating circular action button at the lower-right edge of the reading column
+- open a temporary search surface only when the floating search button is activated
+- keep search active while the user scrolls results or moves focus away from the input
+- close search only through explicit dismissal actions such as `Cancel`, `Escape`, or browser `Back`
 - show each book as a compact card/list item
 - navigate to a dedicated book detail route when a book is selected
+- restore the last opened book position when the user returns to the books list on the same device and browser
 
 The list is intended for rapid scanning rather than metadata-heavy browsing.
 
@@ -79,7 +80,7 @@ Current behavior:
 
 - show the selected book title in a sticky top header
 - allow navigation back to the books list
-- hide the signed-in bottom navigation while a book is open
+- render the reader as its own dedicated route outside the books shell while keeping the shared mobile header geometry
 - cycle between three visibility modes:
   - `All`
   - `Visible`
@@ -145,6 +146,8 @@ Current behavior:
 - show the current user email
 - allow the user to choose `Light`, `Dark`, or `System` appearance for the current browser
 - allow sign out
+
+The page is intentionally separate from the books shell state and is reached through the books header rather than a tab switch.
 
 The appearance preference is stored in browser local storage and defaults to the system theme when no explicit choice exists.
 

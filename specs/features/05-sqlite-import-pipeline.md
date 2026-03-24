@@ -6,7 +6,7 @@ This feature covers the end-to-end import of a source SQLite bookmark database i
 
 ## Current behavior
 
-- the user selects a SQLite file from the `Upload` tab
+- the user selects a SQLite file from the dedicated `Upload` page
 - the client sends the file to the import API route together with the current auth token
 - the server uploads the file to the `imports` bucket
 - the server parses source books, all `BookHash` rows for each source book, authors, and bookmarks from SQLite using the asset-free server-side `sql.js` asm build

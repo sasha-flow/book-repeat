@@ -7,8 +7,9 @@ This feature covers the book detail screen used for reading imported bookmark te
 ## Current behavior
 
 - the book detail screen is opened from the books list route
-- the reader uses a dedicated mobile-width layout without the app shell's bottom navigation
+- the reader uses a dedicated mobile-width layout outside the main books shell
 - the header is sticky and includes a back action, the current book title, and a filter toggle
+- the reader header uses the same shared mobile header geometry as the books, upload, and profile pages even though the reader remains a dedicated route outside the main shell
 - bookmarks are rendered in source order using `paragraph` and `word`
 - the filter toggle cycles through three modes: `All`, `Visible`, and `Text`
 - the browser stores a per-book local resume state containing the last active filter and the last bookmark anchor seen at the top of the visible reader area

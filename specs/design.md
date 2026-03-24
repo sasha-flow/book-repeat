@@ -18,8 +18,9 @@ It is the cross-cutting design reference for implemented behavior only. It shoul
 
 - the product is mobile-first and optimized around a single centered column
 - primary application layouts are constrained to a narrow centered column on larger viewports instead of stretching into desktop dashboard layouts
-- top-level shell screens use persistent chrome so the user can move between the app's primary tasks without losing orientation
-- nested routes use dedicated page layouts with a back action instead of reusing bottom navigation
+- the signed-in home screen uses persistent top chrome so the user can stay oriented while browsing books
+- secondary signed-in screens such as upload and profile use dedicated page layouts with a top back action instead of reusing shared bottom navigation
+- the books, upload, profile, and reader screens should reuse one shared mobile header geometry so title position, action sizing, and border treatment stay visually aligned across top-level flows
 - layout decisions should favor reading comfort, clear touch targets, and predictable vertical flow over high information density
 - layouts with editable text inputs should react to the real visible viewport on mobile instead of assuming the pre-keyboard page height remains usable
 
@@ -59,12 +60,22 @@ It is the cross-cutting design reference for implemented behavior only. It shoul
 
 ## Navigation and interaction patterns
 
-- top-level navigation belongs in the bottom tab bar only
+- the signed-in home screen is the books list and exposes secondary destinations from the top bar instead of a persistent bottom tab bar
 - secondary flows should prefer a single explicit back action instead of duplicating shell navigation
 - interaction design should favor a small number of obvious actions over dense persistent toolbars
 - contextual actions should appear in dedicated surfaces instead of expanding the baseline layout with always-visible controls
 - dismissal behavior for temporary UI should stay predictable across touch, pointer, keyboard, and browser navigation where supported
 - when the software keyboard opens on mobile, active text entry and nearby content take priority over persistent bottom chrome until the keyboard closes
+- lightweight contextual actions may float above content when they are transient entry points rather than persistent navigation
+
+## Search interactions
+
+- books search is an on-demand action, not a permanently visible field on the books screen
+- the default books state shows content first and exposes search through a floating circular action button anchored above the lower safe area
+- the floating books search action uses one opaque dark circular surface with a centered white search glyph and a soft elevated shadow instead of a multi-ring treatment
+- activating books search replaces the floating action with a dedicated search field surface
+- books search stays active while the user scrolls results or moves focus away from the input and closes only through explicit dismissal actions such as `Cancel`, `Escape`, or browser `Back`
+- temporary search surfaces should remain opaque and keyboard-aware so content does not visually bleed through them
 
 ## Component system
 

@@ -5,13 +5,13 @@ const { getAppShellLayoutMetrics } = (await import(
   new URL("./app-shell-layout.ts", import.meta.url).href
 )) as typeof import("./app-shell-layout");
 
-test("pinned shell chrome reserves space for both search bar and bottom nav", () => {
+test("pinned shell chrome reserves space for a bottom bar without rendering bottom navigation", () => {
   assert.deepEqual(
     getAppShellLayoutMetrics({ chromeMode: "pinned", hasBottomBar: true }),
     {
       headerClassName: "fixed top-0 left-0 right-0 z-20",
-      navClassName: "fixed bottom-0 left-0 right-0 z-20",
-      bottomBarClassName: "fixed bottom-[65.098px] left-0 right-0 z-20",
+      navClassName: "hidden",
+      bottomBarClassName: "fixed bottom-0 left-0 right-0 z-20",
       bottomBarPlacement: "bottom",
       mainClassName: "flex-1 px-4 py-3",
       mainStyle: undefined,
@@ -22,7 +22,7 @@ test("pinned shell chrome reserves space for both search bar and bottom nav", ()
       needsHeaderSpacer: true,
       needsTopBottomBarSpacer: false,
       needsBottomBarSpacer: true,
-      needsNavSpacer: true,
+      needsNavSpacer: false,
     },
   );
 });
@@ -32,7 +32,7 @@ test("flow shell chrome keeps content spacing inside main area", () => {
     getAppShellLayoutMetrics({ chromeMode: "flow", hasBottomBar: false }),
     {
       headerClassName: "sticky top-0 z-20",
-      navClassName: "sticky bottom-0 z-20 mt-auto",
+      navClassName: "hidden",
       bottomBarClassName: "sticky bottom-[65.098px] z-20 mt-auto",
       bottomBarPlacement: "bottom",
       mainClassName: "flex-1",
@@ -40,7 +40,7 @@ test("flow shell chrome keeps content spacing inside main area", () => {
         paddingLeft: 15.993,
         paddingRight: 15.993,
         paddingTop: 23.99,
-        paddingBottom: 65.098,
+        paddingBottom: 0,
       },
       chromeSurfaceStyle: undefined,
       needsHeaderSpacer: false,
@@ -71,6 +71,28 @@ test("pinned shell yields bottom nav space and moves search chrome to the top wh
       },
       needsHeaderSpacer: true,
       needsTopBottomBarSpacer: true,
+      needsBottomBarSpacer: false,
+      needsNavSpacer: false,
+    },
+  );
+});
+
+test("pinned shell without a bottom bar keeps only the header chrome", () => {
+  assert.deepEqual(
+    getAppShellLayoutMetrics({ chromeMode: "pinned", hasBottomBar: false }),
+    {
+      headerClassName: "fixed top-0 left-0 right-0 z-20",
+      navClassName: "hidden",
+      bottomBarClassName: "hidden",
+      bottomBarPlacement: "bottom",
+      mainClassName: "flex-1 px-4 py-3",
+      mainStyle: undefined,
+      chromeSurfaceStyle: {
+        backgroundColor: "var(--background)",
+        isolation: "isolate",
+      },
+      needsHeaderSpacer: true,
+      needsTopBottomBarSpacer: false,
       needsBottomBarSpacer: false,
       needsNavSpacer: false,
     },
