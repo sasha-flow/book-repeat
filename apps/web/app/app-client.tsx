@@ -47,6 +47,11 @@ import {
   type AppShellChromeMode,
 } from "../lib/app-shell-layout";
 import {
+  getAuthScreenSubmitLabel,
+  getAuthScreenTitle,
+  isAuthScreenSubmitDisabled,
+} from "../lib/auth-screen-contract";
+import {
   clearBooksSearchQuery,
   createBooksSearchState,
   dismissBooksSearch,
@@ -119,7 +124,6 @@ function AuthScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const authViewportHeight =
     keyboardViewport.viewportHeight > 0
@@ -130,9 +134,10 @@ function AuthScreen({
     setLoading(true);
     setError(null);
 
-    const response = isSignUp
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
+    const response = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     setLoading(false);
 
@@ -143,13 +148,6 @@ function AuthScreen({
 
     if (response.data.session) {
       onSignedIn(response.data.session);
-      return;
-    }
-
-    if (isSignUp) {
-      setError(
-        "Account created. Check your email verification settings and sign in.",
-      );
     }
   };
 
@@ -162,7 +160,7 @@ function AuthScreen({
     >
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>{isSignUp ? "Create account" : "Sign in"}</CardTitle>
+          <CardTitle>{getAuthScreenTitle()}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -187,19 +185,13 @@ function AuthScreen({
           <Button
             className="w-full"
             onClick={submit}
-            disabled={loading || !email || !password}
+            disabled={isAuthScreenSubmitDisabled({
+              email,
+              password,
+              loading,
+            })}
           >
-            {loading
-              ? "Please wait..."
-              : isSignUp
-                ? "Create account"
-                : "Sign in"}
-          </Button>
-          <Button
-            className="w-full"
-            onClick={() => setIsSignUp((value) => !value)}
-          >
-            {isSignUp ? "Use existing account" : "Create new account"}
+            {getAuthScreenSubmitLabel({ loading })}
           </Button>
         </CardContent>
       </Card>

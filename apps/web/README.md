@@ -7,7 +7,7 @@ It is implemented with Next.js App Router, React 19, TypeScript, Supabase, and s
 ## What it does
 
 - Authenticates users with Supabase Auth.
-- Supports sign-in and sign-up with Supabase Auth.
+- Supports email/password sign-in only with Supabase Auth for existing accounts provisioned manually by an administrator in the Supabase admin UI.
 - Shows mobile-first app shell with bottom navigation: `Books`, `Upload`, `Profile`.
 - Imports uploaded SQLite bookmark files to Supabase (`books`, `book_source_hashes`, and `bookmarks`), deduplicated by canonical book hash sets and bookmark UID.
 - Allows per-book bookmark reading with filter toggle and bookmark type context menu (`default`, `header`, `hidden`).

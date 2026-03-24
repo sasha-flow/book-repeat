@@ -7,8 +7,9 @@ This feature covers user authentication and the top-level mobile-first shell tha
 ## Current behavior
 
 - unauthenticated users see a card-based authentication screen
-- users can switch between sign-in and sign-up modes
-- sign-up uses the same email/password card and may complete either with an immediate session or with a follow-up message to check email verification settings before signing in
+- the signed-out screen supports email/password sign-in only for existing accounts
+- the application does not expose any self-service sign-up action or sign-up mode
+- new accounts are provisioned manually by an administrator through the Supabase admin UI rather than through an in-app sign-up flow
 - successful authentication opens the main app shell
 - the signed-in default route is the `Books` screen at `/`
 - the books screen uses a pinned top bar with secondary actions for `Upload` and `Profile`
@@ -19,7 +20,7 @@ This feature covers user authentication and the top-level mobile-first shell tha
 
 ## Main components
 
-- `AuthScreen` handles sign-in and sign-up interactions
+- `AuthScreen` handles email/password sign-in interactions for pre-provisioned accounts
 - `useAuthenticatedSession` initializes the current session and subscribes to auth state changes
 - `AppShell` renders the mobile-width layout plus optional pinned top chrome, optional temporary bottom chrome, and overlays such as the books search action button
 - `MobilePageHeader` and `MobilePageHeaderButton` provide the shared top-bar geometry used by books, upload, profile, and reader pages
@@ -28,6 +29,7 @@ This feature covers user authentication and the top-level mobile-first shell tha
 ## Business rules
 
 - the user must be authenticated to access books, uploads, or account data
+- self-service registration is disabled in the product UI; existing administrator-provisioned accounts can still sign in with email and password
 - auth state changes immediately affect the rendered app shell
 - the default signed-in destination is `Books`
 - the shell is optimized for narrow screens and constrained to a single-column layout
@@ -46,6 +48,7 @@ This feature covers user authentication and the top-level mobile-first shell tha
 ## Out of scope
 
 - password reset flows
+- self-service sign-up or invite flows
 - social login providers
 - profile management beyond sign-out and appearance selection
 - role-based application modes

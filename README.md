@@ -4,7 +4,7 @@ Book Repeat is a mobile-first web application for importing SQLite bookmark data
 
 The current implementation supports:
 
-- email/password authentication with Supabase Auth, including account creation from the signed-out screen
+- email/password sign-in with Supabase Auth for administrator-provisioned accounts
 - a mobile-first application shell with bottom navigation for `Books`, `Upload`, and `Profile`
 - SQLite file upload, parsing, user-scoped deduplication, and import run logging
 - a searchable books list
@@ -24,7 +24,7 @@ Deeper project documentation lives under [specs/product.md](specs/product.md), [
 
 ## Product flow
 
-1. The user signs in or creates an account.
+1. The user signs in with an existing account created manually by an administrator in the Supabase admin UI.
 2. The authenticated app opens in a mobile-first shell.
 3. In `Upload`, the user selects a SQLite database file exported from the source reader app.
 4. The backend uploads the file to Supabase Storage, parses source books plus all of their `BookHash` values, resolves or merges one canonical user-scoped book per overlapping hash set, upserts bookmarks, writes an import summary, and deletes the uploaded file.

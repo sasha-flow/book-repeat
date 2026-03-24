@@ -17,7 +17,7 @@ This document describes the current implemented behavior only.
 ## Primary user journey
 
 1. The user opens the application and sees the authentication screen if there is no active session.
-2. The user signs in with email and password, or switches the auth card into sign-up mode to create an account.
+2. The user signs in with an existing email/password account that was provisioned manually by an administrator through the Supabase admin UI.
 3. After authentication, the user lands on the `Books` screen at `/`.
 4. The user opens the dedicated `Upload` page from the books top bar and uploads a SQLite file.
 5. The system imports books and bookmarks into the user's own dataset.
@@ -33,11 +33,10 @@ When the user is not authenticated, the app shows a single card-based authentica
 Supported actions:
 
 - sign in with email and password
-- switch to sign-up mode and create an account with email and password
 
 The signed-out screen is a gate for the application. The books list, upload flow, and profile area are not available until a session exists.
 
-If sign-up succeeds without an immediate session, the screen shows a follow-up message that the account was created and the user should check the email verification settings before signing in.
+The app does not offer self-service registration. New accounts are created outside the app by an administrator through the Supabase admin UI.
 
 ## Signed-in application shell
 

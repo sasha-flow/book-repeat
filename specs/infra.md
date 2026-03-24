@@ -114,6 +114,10 @@ The repository uses local Supabase services for:
 
 The checked-in `supabase/config.toml` currently pins local Postgres to major version `17`. That version should match the remote Supabase project when validating migrations locally or in CI.
 
+The checked-in local auth configuration is expected to keep email/password sign-in available for existing accounts while leaving self-service signup out of the product flow.
+
+Changes to `supabase/config.toml` do not apply to an already running local stack until the developer restarts Supabase with `supabase stop` followed by `supabase start`.
+
 The local status output is used to populate application environment variables:
 
 - `Project URL` -> `NEXT_PUBLIC_SUPABASE_URL`

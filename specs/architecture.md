@@ -81,13 +81,15 @@ The browser client continues to rely on row-level security for normal user-scope
 
 ## Authentication model
 
-Authentication is provided by Supabase Auth using email/password credentials.
+Authentication is provided by Supabase Auth using email/password credentials for pre-provisioned accounts.
 
 Application behavior:
 
 - the client reads the current session on startup
 - auth state changes update the rendered shell in real time
 - unauthenticated users only see the auth screen
+- self-service signup is disabled in the product surface, while email/password sign-in remains enabled for existing accounts
+- new user accounts are expected to be created manually by an administrator through the Supabase admin UI
 - authenticated users can access only their own rows through row-level security
 
 ## Data model
