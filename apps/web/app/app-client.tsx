@@ -52,6 +52,15 @@ import {
   nextBookmarkFilter,
 } from "../lib/bookmark-filters";
 import {
+  findRestoreBook,
+  getBookListResumeScrollTop,
+} from "../lib/book-list-resume";
+import {
+  loadStoredBookListResumeState,
+  saveStoredBookListResumeState,
+  type BookListResumeState,
+} from "../lib/book-list-resume-storage";
+import {
   findCurrentBookmarkResumeAnchor,
   findRestoreBookmark,
 } from "../lib/bookmark-resume";
@@ -82,6 +91,9 @@ interface MenuState {
 
 const BOOK_DETAIL_DEFAULT_FILTER: BookmarkFilter = "without-hidden";
 const BOOK_DETAIL_HEADER_FALLBACK_BOTTOM = 66;
+const BOOKS_LIST_BOTTOM_BAR_HEIGHT = 69.079;
+const BOOKS_LIST_NAV_HEIGHT = 65.098;
+const BOOKS_LIST_HIGHLIGHT_DURATION_MS = 367;
 
 function getTouchPoints(touches: TouchEvent<HTMLLIElement>["touches"]) {
   return Array.from(touches, ({ identifier, clientX, clientY }) => ({
@@ -434,9 +446,15 @@ function AppShell({
 function BooksList({
   books,
   loadingBooks,
+  highlightedBookId,
+  onBookSelect,
+  onBookElement,
 }: {
   books: BookRecord[];
   loadingBooks: boolean;
+  highlightedBookId: string | null;
+  onBookSelect: (bookId: string) => void;
+  onBookElement: (bookId: string, element: HTMLLIElement | null) => void;
 }) {
   return (
     <section>
@@ -444,28 +462,39 @@ function BooksList({
         <p className="px-1 text-sm text-muted-foreground">Loading books...</p>
       ) : null}
       <ul style={{ display: "grid", gap: 7.997 }}>
-        {books.map((book) => (
-          <li key={book.id}>
-            <Link
-              href={`/books/${book.id}`}
-              className="block w-full text-left text-[16px] font-normal leading-[24px] text-foreground transition-colors hover:bg-accent/40"
-              style={{
-                minHeight: 58.192,
-                borderRadius: 10,
-                borderWidth: 1.108,
-                borderStyle: "solid",
-                borderColor: "var(--border)",
-                backgroundColor: "var(--card)",
-                paddingLeft: 17.101,
-                paddingRight: 17.101,
-                paddingTop: 17.101,
-                paddingBottom: 17.101,
-              }}
+        {books.map((book) => {
+          const isHighlighted = book.id === highlightedBookId;
+
+          return (
+            <li
+              key={book.id}
+              ref={(element) => onBookElement(book.id, element)}
+              data-book-id={book.id}
             >
-              {book.title}
-            </Link>
-          </li>
-        ))}
+              <Link
+                href={`/books/${book.id}`}
+                onClick={() => onBookSelect(book.id)}
+                className={`block w-full text-left text-[16px] font-normal leading-[24px] text-foreground transition-colors hover:bg-accent/40 ${
+                  isHighlighted ? "book-list-last-opened-highlight" : ""
+                }`}
+                style={{
+                  minHeight: 58.192,
+                  borderRadius: 10,
+                  borderWidth: 1.108,
+                  borderStyle: "solid",
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--card)",
+                  paddingLeft: 17.101,
+                  paddingRight: 17.101,
+                  paddingTop: 17.101,
+                  paddingBottom: 17.101,
+                }}
+              >
+                {book.title}
+              </Link>
+            </li>
+          );
+        })}
         {!books.length && !loadingBooks ? (
           <li
             className="bg-card text-sm text-muted-foreground"
@@ -699,7 +728,15 @@ export function AppClient() {
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [loadingBooks, setLoadingBooks] = useState(false);
+  const [highlightedBookId, setHighlightedBookId] = useState<string | null>(
+    null,
+  );
+  const [bookListResumeReady, setBookListResumeReady] = useState(false);
   const deferredBookQuery = useDeferredValue(bookQuery);
+  const bookListElements = useRef(new Map<string, HTMLLIElement>());
+  const pendingBookListResumeState = useRef<BookListResumeState | null>(null);
+  const highlightTimer = useRef<number | null>(null);
+  const highlightFrame = useRef<number | null>(null);
 
   const visibleBooks = useMemo(() => {
     const normalizedQuery = deferredBookQuery.trim().toLowerCase();
@@ -717,6 +754,31 @@ export function AppClient() {
       );
     });
   }, [books, deferredBookQuery]);
+
+  const handleBookElement = useCallback(
+    (bookId: string, element: HTMLLIElement | null) => {
+      if (element) {
+        bookListElements.current.set(bookId, element);
+        return;
+      }
+
+      bookListElements.current.delete(bookId);
+    },
+    [],
+  );
+
+  const handleBookSelect = useCallback((bookId: string) => {
+    const storage = getBrowserStorage();
+
+    if (!storage) {
+      return;
+    }
+
+    saveStoredBookListResumeState(storage, {
+      bookId,
+      savedAt: Date.now(),
+    });
+  }, []);
 
   const loadBooks = useCallback(async () => {
     setLoadingBooks(true);
@@ -768,6 +830,117 @@ export function AppClient() {
 
     void loadBooks();
   }, [session, loadBooks]);
+
+  useEffect(() => {
+    if (activeTab !== "books") {
+      setBookListResumeReady(false);
+      return;
+    }
+
+    const storage = getBrowserStorage();
+    const savedState = storage ? loadStoredBookListResumeState(storage) : null;
+
+    pendingBookListResumeState.current = savedState;
+    setHighlightedBookId(null);
+    setBookListResumeReady(true);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "books" ||
+      !bookListResumeReady ||
+      loadingBooks ||
+      !visibleBooks.length
+    ) {
+      return;
+    }
+
+    const pendingState = pendingBookListResumeState.current;
+
+    if (!pendingState) {
+      return;
+    }
+
+    const targetBook = findRestoreBook(visibleBooks, pendingState);
+
+    if (!targetBook) {
+      pendingBookListResumeState.current = null;
+      return;
+    }
+
+    const targetElement = bookListElements.current.get(targetBook.id);
+
+    if (!targetElement) {
+      return;
+    }
+
+    pendingBookListResumeState.current = null;
+
+    const rect = targetElement.getBoundingClientRect();
+    const targetTop = getBookListResumeScrollTop({
+      itemTop: rect.top,
+      itemHeight: rect.height,
+      scrollY: window.scrollY,
+      viewportHeight: window.innerHeight,
+      topInset: keyboardViewport.keyboardOpen
+        ? BOOKS_LIST_BOTTOM_BAR_HEIGHT
+        : 0,
+      bottomInset: keyboardViewport.keyboardOpen
+        ? 0
+        : BOOKS_LIST_BOTTOM_BAR_HEIGHT + BOOKS_LIST_NAV_HEIGHT,
+    });
+
+    window.scrollTo({ top: targetTop, behavior: "auto" });
+
+    if (highlightFrame.current !== null) {
+      window.cancelAnimationFrame(highlightFrame.current);
+    }
+
+    setHighlightedBookId(null);
+    highlightFrame.current = window.requestAnimationFrame(() => {
+      highlightFrame.current = window.requestAnimationFrame(() => {
+        highlightFrame.current = null;
+        setHighlightedBookId(targetBook.id);
+      });
+    });
+  }, [
+    activeTab,
+    bookListResumeReady,
+    keyboardViewport.keyboardOpen,
+    loadingBooks,
+    visibleBooks,
+  ]);
+
+  useEffect(() => {
+    if (!highlightedBookId) {
+      return;
+    }
+
+    if (highlightTimer.current !== null) {
+      window.clearTimeout(highlightTimer.current);
+    }
+
+    highlightTimer.current = window.setTimeout(() => {
+      highlightTimer.current = null;
+      setHighlightedBookId(null);
+    }, BOOKS_LIST_HIGHLIGHT_DURATION_MS);
+
+    return () => {
+      if (highlightTimer.current !== null) {
+        window.clearTimeout(highlightTimer.current);
+        highlightTimer.current = null;
+      }
+    };
+  }, [highlightedBookId]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightFrame.current !== null) {
+        window.cancelAnimationFrame(highlightFrame.current);
+        highlightFrame.current = null;
+      }
+    };
+  }, []);
 
   const uploadFile = async (file: File) => {
     if (!session) {
@@ -883,7 +1056,15 @@ export function AppClient() {
       </div>
     );
 
-    content = <BooksList books={visibleBooks} loadingBooks={loadingBooks} />;
+    content = (
+      <BooksList
+        books={visibleBooks}
+        loadingBooks={loadingBooks}
+        highlightedBookId={highlightedBookId}
+        onBookSelect={handleBookSelect}
+        onBookElement={handleBookElement}
+      />
+    );
   }
 
   if (activeTab === "upload") {
@@ -1635,7 +1816,7 @@ export function BookDetailClient({ bookId }: { bookId: string }) {
   );
 }
 
-function getBookmarkResumeStorage(): BookmarkResumeStorageLike | null {
+function getBrowserStorage(): Storage | null {
   if (typeof window === "undefined") {
     return null;
   }
@@ -1645,4 +1826,8 @@ function getBookmarkResumeStorage(): BookmarkResumeStorageLike | null {
   } catch {
     return null;
   }
+}
+
+function getBookmarkResumeStorage(): BookmarkResumeStorageLike | null {
+  return getBrowserStorage();
 }

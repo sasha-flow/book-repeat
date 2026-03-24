@@ -11,7 +11,9 @@ This feature covers discovery and navigation of imported books.
 - the search field remains visible while the user scrolls the books list
 - when the mobile software keyboard opens during search, the search field remains visible and the filtered results continue to use the actual visible viewport instead of disappearing above it
 - each result navigates to a dedicated book detail route
-- reopening a book returns the user to the last saved bookmark-list position for that book on the same device and browser
+- the books list stores the last book opened from the list in local browser storage
+- returning to the books list scrolls the last opened book toward the center of the visible list area when possible and otherwise lets browser clamping keep it near the top
+- after scroll restoration, the last opened book briefly flashes with a high-contrast highlight so the user can quickly identify it
 - the books area is the default signed-in destination
 
 ## Presentation rules
@@ -19,6 +21,8 @@ This feature covers discovery and navigation of imported books.
 - the list is optimized for quick scanning on mobile
 - the list scrolls beneath pinned shell chrome without visually bleeding through the books search bar or bottom navigation
 - while the search field is actively using the mobile software keyboard, bottom shell chrome may temporarily yield space so the list and short result sets stay visible
+- the restored book should be centered within the visible list area as much as the available scroll range allows
+- the highlight is intentionally short and should not remain sticky after the initial hint animation completes
 - title is the primary visual field
 - authors are supporting metadata when available
 - navigation to the selected book is a primary action on each item
@@ -28,6 +32,7 @@ This feature covers discovery and navigation of imported books.
 - only user-owned books are visible
 - books are imported records, not manually authored in the app
 - search is intended as a lightweight client-side convenience, not an advanced catalog feature
+- last opened book state is local-only browser state and is updated only when the user opens a book from the books list UI
 
 ## Data dependencies
 
