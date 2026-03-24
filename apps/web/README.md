@@ -1,5 +1,9 @@
 # Book Repeat Web App
 
+This app is the single deployable product runtime in the monorepo.
+
+It is implemented with Next.js App Router, React 19, TypeScript, Supabase, and shared UI primitives from `@repo/ui`.
+
 ## What it does
 
 - Authenticates users with Supabase Auth.
@@ -10,7 +14,7 @@
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and set values from `supabase start` (or `supabase status`):
+Copy `apps/web/.env.example` to `apps/web/.env.local` and set values from `supabase start` (or `supabase status`):
 
 - `NEXT_PUBLIC_SUPABASE_URL` = `Project URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = `Publishable` (or `anon` in older CLI output)
@@ -32,6 +36,13 @@ SUPABASE_IMPORT_BUCKET=imports
 pnpm --filter web dev
 ```
 
+Production build and local production serving:
+
+```bash
+pnpm --filter web build
+pnpm --filter web start
+```
+
 ## Build checks
 
 ```bash
@@ -40,6 +51,15 @@ pnpm --filter web lint
 pnpm --filter web check-types
 pnpm --filter web build
 ```
+
+The `test` script uses the Node.js built-in test runner against `lib/*.test.ts`.
+
+## UI behavior notes
+
+- The signed-in shell keeps the top chrome, search bar, and bottom navigation pinned on the three primary tabs.
+- On mobile, the shell uses `visualViewport`-based keyboard detection so focused text inputs and short result sets remain usable when the software keyboard opens.
+- The book reader route bypasses the shell navigation and renders a dedicated back-button layout.
+- The bookmark action sheet uses an opaque modal bottom sheet and stays aligned to the same centered mobile-width column as the reader content on wider viewports.
 
 ## Import flow
 
@@ -50,3 +70,5 @@ pnpm --filter web build
 5. Server upserts hash aliases into `book_source_hashes` and bookmarks into `bookmarks`.
 6. Server logs detailed import diagnostics, planning, merge results, and failures to the terminal, and the browser logs failed import responses to the console.
 7. Deletes uploaded file from storage and writes `import_runs` summary.
+
+The import route keeps user-facing failure text generic while attaching a request reference id to help correlate browser failures with server logs.

@@ -8,6 +8,8 @@ If another document needs to mention persistence, it should describe only behavi
 
 The current persisted model is implemented through the SQL migrations in `supabase/migrations` and backed by Supabase Postgres, Supabase Auth, and Supabase Storage.
 
+The local Supabase configuration currently targets PostgreSQL major version `17`, and local development should stay on the same major version as the remote project so `supabase db reset`, `supabase db push`, and CI dry-runs behave consistently.
+
 ## Source of truth
 
 - application schema changes are migration-driven through `supabase/migrations`
@@ -219,12 +221,22 @@ Row-level security is enabled on:
 - `bookmarks`
 - `import_runs`
 
-Policies are owner-scoped for read, insert, update, and delete where applicable.
+Policy coverage:
+
+- `books`: owner-scoped `select`, `insert`, `update`, and `delete`
+- `book_source_hashes`: owner-scoped `select`, `insert`, `update`, and `delete`
+- `bookmarks`: owner-scoped `select`, `insert`, `update`, and `delete`
+- `import_runs`: owner-scoped `select` and `insert`
 
 Storage security:
 
 - uploaded import files live in the private `imports` bucket
-- storage object policies restrict insert, read, and delete to the authenticated user's own folder prefix
+- storage object policies restrict `insert`, `select`, and `delete` to the authenticated user's own folder prefix inside `imports`
+
+Operational security note:
+
+- the browser app is expected to use these owner-scoped RLS and storage policies directly for normal reads and bookmark-type updates
+- the import route uses a validated service-role client for privileged writes, but the user-scoped policies still define the steady-state access model for persisted data
 
 ## Operational notes
 

@@ -12,12 +12,12 @@ Related cross-cutting documentation:
 
 ## Implemented features
 
-1. [01-auth-and-app-shell.md](features/01-auth-and-app-shell.md)
-2. [02-books-browsing.md](features/02-books-browsing.md)
-3. [03-book-reading-and-filters.md](features/03-book-reading-and-filters.md)
-4. [04-bookmark-type-management.md](features/04-bookmark-type-management.md)
-5. [05-sqlite-import-pipeline.md](features/05-sqlite-import-pipeline.md)
-6. [06-data-model-and-storage.md](features/06-data-model-and-storage.md)
+1. [01-auth-and-app-shell.md](features/01-auth-and-app-shell.md) - signed-out authentication, books-first signed-in shell, shared mobile headers, standalone upload/profile pages, and browser-local theme preference
+2. [02-books-browsing.md](features/02-books-browsing.md) - books list with floating search action, explicit search dismissal, and last-opened restoration
+3. [03-book-reading-and-filters.md](features/03-book-reading-and-filters.md) - dedicated reader route, source-ordered bookmark reading, and visibility filters
+4. [04-bookmark-type-management.md](features/04-bookmark-type-management.md) - bookmark context actions, long-press rules, and persisted bookmark-type changes
+5. [05-sqlite-import-pipeline.md](features/05-sqlite-import-pipeline.md) - authenticated SQLite upload, canonical-book reconciliation, diagnostics, and cleanup
+6. [06-data-model-and-storage.md](features/06-data-model-and-storage.md) - persistence responsibilities, canonical identity rules, RLS-backed ownership, and import storage expectations
 
 ## Documentation rules
 

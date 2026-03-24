@@ -29,6 +29,9 @@ Primary workspace commands:
 - `pnpm install` installs all workspace dependencies
 - `pnpm dev` starts the workspace development flow
 - `pnpm lint`, `pnpm check-types`, and `pnpm build` run workspace-level verification tasks
+- `pnpm format` rewrites tracked TypeScript, TSX, and Markdown files with Prettier
+- `pnpm run deps:check` reports outdated workspace dependencies
+- `pnpm run deps:update` upgrades workspace dependencies to the latest versions allowed by the current package manifests
 
 For web-only work, the repository also supports filtered commands such as `pnpm --filter web dev`, `pnpm --filter web test`, `pnpm --filter web lint`, `pnpm --filter web check-types`, and `pnpm --filter web build`.
 
@@ -61,19 +64,30 @@ The product runtime is centered on the `apps/web` Next.js application.
 
 Current runtime characteristics:
 
-- Next.js App Router application
-- TypeScript codebase
+- Next.js 16 App Router application
+- React 19 client runtime
+- TypeScript codebase pinned to `5.9.2` at the root and in app packages so local, CI, and `next typegen` output stay reproducible
 - Tailwind-based styling
 - browser and server integration with Supabase
 - Vercel-targeted production hosting for `apps/web`
 
 The deployed application requires Supabase-backed authentication and database access. The import flow also requires privileged server access through the Supabase service role key.
 
+## Testing and verification
+
+The current automated checks are intentionally small and run directly from repository scripts.
+
+- the web app uses the Node.js built-in test runner through `pnpm --filter web test`
+- linting runs through ESLint with `pnpm --filter web lint` or `pnpm lint`
+- type validation runs through `next typegen` plus `tsc --noEmit` inside `pnpm --filter web check-types`
+- production build validation runs through `pnpm --filter web build` or `pnpm build`
+- pull request validation reuses the root scripts so CI and local workflows stay aligned
+
 ## Local development environment
 
 Local development depends on the following tools:
 
-- Node.js `>= 18`
+- Node.js `>= 24`
 - `pnpm`
 - Supabase CLI
 - Docker for local Supabase services
@@ -84,7 +98,7 @@ The expected local setup flow is:
 2. Start local Supabase services with `supabase start`.
 3. Reset the local database and apply tracked migrations with `supabase db reset`.
 4. Inspect local Supabase credentials with `supabase status`.
-5. Create `apps/web/.env.local` with the required environment variables.
+5. Copy `apps/web/.env.example` to `apps/web/.env.local` and fill in the required environment variables.
 6. Start the app with `pnpm dev` or `pnpm --filter web dev`.
 
 ## Local Supabase services
@@ -97,6 +111,8 @@ The repository uses local Supabase services for:
 - Postgres
 - Storage
 - migration application during local resets
+
+The checked-in `supabase/config.toml` currently pins local Postgres to major version `17`. That version should match the remote Supabase project when validating migrations locally or in CI.
 
 The local status output is used to populate application environment variables:
 
@@ -114,6 +130,8 @@ The current application infrastructure expects these environment variables:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon or publishable key used by the browser application
 - `SUPABASE_SERVICE_ROLE_KEY`: server-side service role key used by privileged import operations
 - `SUPABASE_IMPORT_BUCKET`: optional storage bucket override, defaults to `imports`
+
+The canonical local template for these values is `apps/web/.env.example`.
 
 Operational expectations:
 

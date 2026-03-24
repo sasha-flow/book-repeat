@@ -27,8 +27,9 @@ Core architecture choices:
 The browser client is responsible for:
 
 - session-aware rendering
-- tab navigation inside the mobile-first shell
-- keeping the primary shell chrome pinned on the three top-level tabs
+- rendering the books-first signed-in shell and the dedicated upload and profile routes
+- keeping the books top bar pinned and positioning temporary books search chrome and the floating search action when active
+- deriving keyboard-aware viewport state from `window.visualViewport` so auth forms and search remain usable while the software keyboard is open
 - applying the selected light, dark, or system theme to the document root
 - fetching books and bookmarks from Supabase
 - applying client-side bookmark visibility filters
@@ -38,7 +39,11 @@ The browser client is responsible for:
 
 Most user-facing state lives in the client-side application shell implemented in `apps/web/app/app-client.tsx`.
 
-The primary shell screens (`Books`, `Upload`, and `Profile`) share a pinned mobile chrome layout: the optional top header, the books search bar when present, and the bottom navigation remain fixed on-screen while the main content scrolls underneath reserved layout spacers. Nested routes such as the book reader bypass this shell and render their own page-specific layout with a back action instead of the shell navigation.
+The App Router entry at `apps/web/app/page.tsx` renders the books client shell directly, while `apps/web/app/upload/page.tsx` and `apps/web/app/profile/page.tsx` render dedicated client pages for those secondary signed-in destinations.
+
+The signed-in books screen uses a pinned mobile chrome layout with a shared mobile header, a floating search action, and an optional search surface that can live at the bottom by default and move to the top when the mobile keyboard is open. `Upload` and `Profile` reuse the same centered mobile-width shell but render as dedicated routes with the same header geometry and their own back actions. Nested routes such as the book reader bypass this shell and render their own page-specific layout while still reusing the shared mobile header geometry.
+
+Books search is modelled as temporary client-side UI state rather than route state. Opening search focuses the temporary input, while dismissal is explicit through the on-screen `Cancel` action, `Escape`, or browser `Back`; scrolling and focus movement alone do not close search.
 
 The reader's bookmark action sheet is implemented as a client-side fixed overlay with a dimmed backdrop and an opaque bottom-sheet surface. On touch devices, the sheet opens only after a stationary long press on a single bookmark, and pending activation is cancelled by meaningful touch movement, scrolling, drag input, or multi-touch. On wider viewports, the overlay still uses a full-width fixed rail for modal behavior, but the visible sheet content is constrained to the same centered mobile-width column as the reader so contextual actions stay visually attached to the reading surface.
 
@@ -159,6 +164,7 @@ Current protections:
 - production schema management is migration-driven through the `supabase` directory
 - the server logs request-scoped JSON import diagnostics, duplicate summaries, bounded alias-lookup metrics, and normalized failure details to the console
 - the browser client logs import request failures and responses to the browser console while keeping user-facing failure text generic
+- the web app test suite uses the Node.js built-in test runner against colocated `lib/*.test.ts` files
 
 ## Current limitations
 
